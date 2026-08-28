@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_overview') }} · ASA Panel{% endblock %}
+{% block content %}
+
+<section class="beacon-card" id="beacon-card" data-state="{{ state }}">
+  <div class="beacon" aria-hidden="true"><span class="core"></span></div>
+  <div class="beacon-text">
+    <span class="beacon-label">{{ t('server_status') }}</span>
+    <strong class="beacon-state" id="beacon-state">{{ state }}</strong>
+    <span class="muted mono boot-hint" id="boot-hint" data-enabled="{{ enabled }}"
+          data-on="{{ t('boot_on') }}" data-off="{{ t('boot_off') }}">
+      {% if enabled == 'enabled' %}{{ t('boot_on') }}{% else %}{{ t('boot_off') }}{% endif %}
+    </span>
+    <span class="muted mono" id="update-hint"></span>
+  </div>
+  <form method="post" action="{{ url_for('action') }}" class="controls">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn ok"    name="act" value="start">{{ t('btn_start') }}</button>
+    <button class="btn warn"  name="act" value="restart">{{ t('btn_restart') }}</button>
+    <button class="btn danger" name="act" value="stop">{{ t('btn_stop') }}</button>
+    <button class="btn"       name="act" value="update"
+            onclick="return confirm('{{ t('confirm_update') }}');">
+      {{ t('btn_update') }}
+    </button>
+  </form>
+</section>
+
+<section class="info-strip">
+  <a class="info-cell" href="{{ url_for('maps_page') }}">
+    <span class="info-label">{{ t('active_map_label') }}</span>
+    <span class="info-value">{{ active_map }}</span>
+  </a>
+  <a class="info-cell" href="{{ url_for('mods_page') }}">
+    <span class="info-label">{{ t('mods_active_label') }}</span>
+    <span class="info-value">{{ mods_count }}</span>
+  </a>
+</section>
+
+<section class="panel">
+  <div class="panel-head res-head">
+    <h2>{{ t('res_title') }}</h2>
+    <span class="res-version-tag mono" id="res-version-val"></span>
+  </div>
+  <div class="res-grid">
+    <div class="res-item">
+      <div class="res-top"><span class="res-label">{{ t('res_cpu') }}</span>
+        <span class="res-val mono" id="res-cpu-val">–</span></div>
+      <div class="res-bar"><div class="res-bar-fill" id="res-cpu-bar"></div></div>
+    </div>
+    <div class="res-item">
+      <div class="res-top"><span class="res-label">{{ t('res_mem') }}</span>
+        <span class="res-val mono" id="res-mem-val">–</span></div>
+      <div class="res-bar"><div class="res-bar-fill" id="res-mem-bar"></div></div>
+    </div>
+    <div class="res-item">
+      <div class="res-top"><span class="res-label">{{ t('res_disk') }}</span>
+        <span class="res-val mono" id="res-disk-val">–</span></div>
+      <div class="res-bar"><div class="res-bar-fill" id="res-disk-bar"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('connect_title') }}</h2>
+    {% if connect_kind == 'auto' %}<span class="addr-kind auto">{{ t('connect_kind_auto') }}</span>
+    {% elif connect_kind == 'manual' %}<span class="addr-kind">{{ t('connect_kind_manual') }}</span>
+    {% else %}<span class="addr-kind local">{{ t('connect_kind_local') }}</span>{% endif %}
+  </div>
+  <div class="connect-grid">
+    <div class="connect-row">
+      <div class="connect-meta">
+        <span class="connect-label">{{ t('connect_browser') }}</span>
+        <span class="muted small">{{ t('connect_browser_hint') }}</span>
+      </div>
+      <code class="connect-addr" id="addr-name">{{ session_name }}</code>
+      <button class="btn tiny" type="button" onclick="copyAddr('addr-name', this)">{{ t('connect_copy') }}</button>
+    </div>
+    <div class="connect-row">
+      <div class="connect-meta">
+        <span class="connect-label">{{ t('connect_console') }}</span>
+        <span class="muted small">{{ t('connect_console_hint') }}</span>
+      </div>
+      <code class="connect-addr" id="addr-console">open {{ connect_ip }}:{{ connect_game }}</code>
+      <button class="btn tiny" type="button" onclick="copyAddr('addr-console', this)">{{ t('connect_copy') }}</button>
+    </div>
+  </div>
+  {% if connect_kind == 'local' %}
+  <p class="hint-line">{{ t('connect_local_note') }}</p>
+  {% endif %}
+</section>
+
+<script>
+function copyAddr(id, btn) {
+  var el = document.getElementById(id);
+  var txt = el.textContent.replace(/^open /, "");
+  navigator.clipboard.writeText(txt).then(function () {
+    var old = btn.textContent;
+    btn.textContent = "\u2713";
+    setTimeout(function () { btn.textContent = old; }, 1200);
+  });
+}
+</script>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('players_online') }} <span class="pill" id="player-count">–</span></h2>
+    <span class="muted mono" id="rcon-note"></span>
+  </div>
+  <ul class="players" id="players"><li class="muted">{{ t('loading') }}</li></ul>
+  {% if rcon_enabled %}
+  <form method="post" action="{{ url_for('rcon_action') }}" class="rcon-controls">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn ok"   name="act" value="save">{{ t('world_save') }}</button>
+    <button class="btn warn" name="act" value="save_shutdown"
+            onclick="return confirm('{{ t('confirm_save_stop') }}');">
+      {{ t('save_and_stop') }}
+    </button>
+    <span class="broadcast">
+      <input name="message" placeholder="{{ t('msg_placeholder') }}" spellcheck="false">
+      <button class="btn" name="act" value="broadcast">{{ t('send') }}</button>
+    </span>
+  </form>
+  <p class="muted small">{{ t('rcon_help') }}</p>
+  {% else %}
+  <form method="post" action="{{ url_for('rcon_setup') }}" class="rcon-controls">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn primary" name="act" value="setup">{{ t('rcon_setup_btn') }}</button>
+    <span class="muted small">{{ t('rcon_setup_help') }}</span>
+  </form>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('server_log') }}</h2>
+    <span class="muted mono" id="poll-note">{{ t('auto_refresh') }}</span>
+  </div>
+  <pre class="log" id="log">{{ logs }}</pre>
+</section>
+
+<section class="panel" id="update-panel" hidden>
+  <div class="panel-head">
+    <h2>{{ t('update_running') }}</h2>
+    <span class="muted mono" id="update-state"></span>
+  </div>
+  <pre class="log" id="update-log"></pre>
+</section>
+
+<script>
+const card = document.getElementById('beacon-card');
+const stateEl = document.getElementById('beacon-state');
+const logEl = document.getElementById('log');
+const updPanel = document.getElementById('update-panel');
+const updLog = document.getElementById('update-log');
+const updState = document.getElementById('update-state');
+const bootHint = document.getElementById('boot-hint');
+
+async function poll() {
+  try {
+    const r = await fetch("{{ url_for('status') }}");
+    const d = await r.json();
+    card.dataset.state = d.server;
+    stateEl.textContent = d.server;
+    if (bootHint && d.enabled) {
+      bootHint.dataset.enabled = d.enabled;
+      bootHint.textContent = d.enabled === 'enabled'
+        ? bootHint.dataset.on : bootHint.dataset.off;
+    }
+    if (logEl.textContent !== d.logs) {
+      const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+      logEl.textContent = d.logs;
+      if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    }
+    const updating = d.update === 'activating' || d.update === 'active';
+    updPanel.hidden = !updating;
+    if (updating) {
+      const u = await (await fetch("{{ url_for('update_logs') }}")).json();
+      updState.textContent = u.state;
+      updLog.textContent = u.logs;
+      updLog.scrollTop = updLog.scrollHeight;
+    }
+    if (d.stats) renderStats(d.stats);
+  } catch (e) { /* kurz kein Netz */ }
+}
+
+function setBar(barId, valId, pct, text) {
+  const bar = document.getElementById(barId);
+  const val = document.getElementById(valId);
+  if (val) val.textContent = text;
+  if (bar && pct != null) {
+    bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    bar.classList.toggle('hot', pct >= 90);
+    bar.classList.toggle('warm', pct >= 75 && pct < 90);
+  }
+}
+
+function renderStats(s) {
+  setBar('res-cpu-bar', 'res-cpu-val',
+         s.cpu, s.cpu == null ? '…' : s.cpu + ' %');
+  if (s.mem_total != null)
+    setBar('res-mem-bar', 'res-mem-val', s.mem_pct,
+           (s.mem_used/1024).toFixed(1) + ' / ' + (s.mem_total/1024).toFixed(1) + ' GB');
+  if (s.disk_total != null)
+    setBar('res-disk-bar', 'res-disk-val', s.disk_pct,
+           s.disk_used + ' / ' + s.disk_total + ' GB');
+  const vv = document.getElementById('res-version-val');
+  if (vv) vv.textContent = s.version ? ('v' + s.version) : '';
+}
+
+const playersEl = document.getElementById('players');
+const countEl = document.getElementById('player-count');
+const rconNote = document.getElementById('rcon-note');
+const CSRF = {{ csrf_token()|tojson }};
+const T = {
+  kick: {{ t('kick')|tojson }},
+  ban: {{ t('ban')|tojson }},
+  confirmKick: {{ t('confirm_kick')|tojson }},
+  confirmBan: {{ t('confirm_ban')|tojson }}
+};
+
+async function playerAction(steamid, act, name) {
+  const q = (act === 'ban' ? T.confirmBan : T.confirmKick).replace('{name}', name || '');
+  if (!confirm(q)) return;
+  try {
+    const body = new URLSearchParams({ csrf: CSRF, act: act, steamid: steamid });
+    const d = await (await fetch("{{ url_for('rcon_player') }}", { method: 'POST', body })).json();
+    rconNote.textContent = d.msg || '';
+    setTimeout(() => { rconNote.textContent = ''; }, 5000);
+  } catch (e) { /* ignore */ }
+  pollPlayers();
+}
+
+function renderPlayers(list) {
+  playersEl.innerHTML = '';
+  list.forEach(p => {
+    const li = document.createElement('li');
+    const info = document.createElement('div'); info.className = 'player-info';
+    const nm = document.createElement('span'); nm.className = 'pname'; nm.textContent = p.name || '(?)';
+    const sid = document.createElement('span'); sid.className = 'muted mono sid'; sid.textContent = p.steamid || '';
+    info.append(nm, sid);
+    li.append(info);
+    if (p.steamid) {
+      const acts = document.createElement('div'); acts.className = 'player-actions';
+      const kb = document.createElement('button'); kb.className = 'btn tiny'; kb.textContent = T.kick;
+      kb.onclick = () => playerAction(p.steamid, 'kick', p.name);
+      const bb = document.createElement('button'); bb.className = 'btn tiny danger'; bb.textContent = T.ban;
+      bb.onclick = () => playerAction(p.steamid, 'ban', p.name);
+      acts.append(kb, bb);
+      li.append(acts);
+    }
+    playersEl.append(li);
+  });
+}
+
+async function pollPlayers() {
+  try {
+    const d = await (await fetch("{{ url_for('players') }}")).json();
+    if (!d.reachable) {
+      countEl.textContent = '–';
+      rconNote.textContent = d.note || '';
+      playersEl.innerHTML = '<li class="muted"></li>';
+      playersEl.querySelector('li').textContent = d.note || {{ t('rcon_unreachable')|tojson }};
+      return;
+    }
+    rconNote.textContent = '';
+    countEl.textContent = d.players.length;
+    if (!d.players.length) {
+      playersEl.innerHTML = '<li class="muted"></li>';
+      playersEl.querySelector('li').textContent = {{ t('nobody_online')|tojson }};
+      return;
+    }
+    renderPlayers(d.players);
+  } catch (e) { /* kurz kein Netz */ }
+}
+
+poll();
+pollPlayers();
+{% if stats %}renderStats({{ stats|tojson }});{% endif %}
+setInterval(poll, 4000);
+setInterval(pollPlayers, 8000);
+document.addEventListener('DOMContentLoaded', () => logEl.scrollTop = logEl.scrollHeight);
+</script>
+{% endblock %}
