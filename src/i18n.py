@@ -41,8 +41,8 @@ TRANSLATIONS = {
     "connect_title": {"de": "Verbinden", "en": "Connect"},
     "connect_browser": {"de": "In-Game-Serverliste", "en": "In-game server list"},
     "connect_browser_hint": {
-        "de": "In ASA die Serverliste öffnen und nach dem Servernamen suchen.",
-        "en": "In ASA, open the server list and search for the session name.",
+        "de": "In ASA die Serverliste öffnen, „Server hinzufügen“ und die Adresse (Spiel-Port!) als Favorit eintragen.",
+        "en": "In ASA, open the server list, choose “Add server” and enter this address (game port!) as a favourite.",
     },
     "connect_console": {"de": "Direktverbindung", "en": "Direct connect"},
     "connect_console_hint": {

@@ -73,7 +73,7 @@
         <span class="connect-label">{{ t('connect_browser') }}</span>
         <span class="muted small">{{ t('connect_browser_hint') }}</span>
       </div>
-      <code class="connect-addr" id="addr-name">{{ session_name }}</code>
+      <code class="connect-addr" id="addr-name">{{ connect_ip }}:{{ connect_game }}</code>
       <button class="btn tiny" type="button" onclick="copyAddr('addr-name', this)">{{ t('connect_copy') }}</button>
     </div>
     <div class="connect-row">
@@ -81,7 +81,7 @@
         <span class="connect-label">{{ t('connect_console') }}</span>
         <span class="muted small">{{ t('connect_console_hint') }}</span>
       </div>
-      <code class="connect-addr" id="addr-console">open {{ connect_ip }}:{{ connect_game }}</code>
+      <code class="connect-addr" id="addr-console">{{ connect_ip }}:{{ connect_game }}</code>
       <button class="btn tiny" type="button" onclick="copyAddr('addr-console', this)">{{ t('connect_copy') }}</button>
     </div>
   </div>

@@ -452,7 +452,7 @@ input:focus, textarea:focus {
   border: 1px solid var(--line);
   color: var(--muted);
 }
-.addr-kind.auto { color: var(--accent-ink); background: var(--blue); border-color: var(--blue); }
+.addr-kind.auto { color: var(--accent-ink); background: #e0912f; border-color: #e0912f; }
 .addr-kind.local { color: #b39ddb; border-color: #b39ddb; }
 
 /* Mod-Sync Fortschrittsbalken */
