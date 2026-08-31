@@ -19,6 +19,10 @@ ASA_HOME="/home/asa"
 INSTALL_DIR="/home/asa/asaserver"
 PANEL_DIR="/opt/asa-panel"
 PANEL_PORT="${PANEL_PORT:-80}"         # Port des Web-Panels
+# Feste Spiel-Ports (werden im Panel gesperrt, siehe Port-Sperre)
+GAME_PORT="${GAME_PORT:-7777}"
+QUERY_PORT="${QUERY_PORT:-27015}"
+RCON_PORT="${RCON_PORT:-27020}"
 APPID="2430930"
 STEAMCMD="/usr/games/steamcmd"
 COMPAT_DATA="$INSTALL_DIR/compatdata"  # Proton-Prefix
@@ -180,7 +184,7 @@ if [ ! -f "$GUS" ]; then
 [ServerSettings]
 ServerAdminPassword=$RCON_PW
 RCONEnabled=True
-RCONPort=27020
+RCONPort=$RCON_PORT
 ServerPassword=
 allowThirdPersonPlayer=True
 
@@ -282,11 +286,15 @@ python3 -m venv "$PANEL_DIR/venv"
 # ------------------------- panel.json + Stores ------------------------------
 msg "Erzeuge Panel-Konfiguration, Laufzeitdaten und ersten Benutzer ..."
 PANEL_USER="$PANEL_USER" PANEL_PASS="$PANEL_PASS" INSTALL_DIR="$INSTALL_DIR" PANEL_DIR="$PANEL_DIR" \
+GAME_PORT="$GAME_PORT" QUERY_PORT="$QUERY_PORT" RCON_PORT="$RCON_PORT" \
 "$PANEL_DIR/venv/bin/python" - <<'PY'
 import json, os, secrets
 from werkzeug.security import generate_password_hash
 
 panel_dir = os.environ["PANEL_DIR"]
+game_port = int(os.environ["GAME_PORT"])
+query_port = int(os.environ["QUERY_PORT"])
+rcon_port = int(os.environ["RCON_PORT"])
 conf = {
     "secret_key": secrets.token_hex(32),
     "asa_dir": os.environ["INSTALL_DIR"],
@@ -297,6 +305,11 @@ conf = {
     "maps_path": f"{panel_dir}/maps.json",
     "mods_path": f"{panel_dir}/mods.json",
     "rcon_host": "127.0.0.1",
+    "appid": "2430930",
+    # feste Ports -> im Panel gesperrt (Port-Sperre)
+    "game_port": game_port,
+    "query_port": query_port,
+    "rcon_port": rcon_port,
 }
 with open(f"{panel_dir}/panel.json", "w") as fh:
     json.dump(conf, fh, indent=2)
@@ -305,9 +318,9 @@ runtime = {
     "map": "TheIsland_WP",
     "session_name": "ASA Server",
     "max_players": 70,
-    "port": 7777,
-    "query_port": 27015,
-    "rcon_port": 27020,
+    "port": game_port,
+    "query_port": query_port,
+    "rcon_port": rcon_port,
     "public_address": "",
     "battleye": True,
     "server_password": "",
@@ -360,9 +373,10 @@ $(printf '\033[1;35m')==========================================================
   Web-Panel:   http://${IP:-<container-ip>}:${PANEL_PORT}
   Login:       Benutzer '${PANEL_USER}' + dein gewähltes Passwort
 
-  Ports (in Firewall/OPNsense freigeben):
-    7777/UDP  Spielport (ASA nutzt nur den Spielport, kein Steam-Query nötig)
-    27020/TCP RCON (nur intern nötig, kann zu bleiben)
+  Ports (in Firewall/OPNsense freigeben) – beim Installieren festgelegt & im Panel gesperrt:
+    ${GAME_PORT}/UDP  Spielport (ASA nutzt nur den Spielport, kein Steam-Query nötig)
+    ${RCON_PORT}/TCP RCON (nur intern nötig, kann zu bleiben)
+    (Andere Ports mit  GAME_PORT=... RCON_PORT=... bash install.sh  wählbar.)
 
   RCON/Admin:  ServerAdminPassword (= RCON- und In-Game-Admin-Passwort): ${RCON_PW}
                -> bitte notieren.
@@ -377,6 +391,11 @@ $(printf '\033[1;35m')==========================================================
 
   Der Spielserver ist noch NICHT gestartet – erst im Panel Karte/Mods prüfen,
   dann "Starten" klicken. Der erste Start dauert (Proton-Prefix + Weltgenerierung).
+
+  Updates:     Im Panel unter "Ressourcen" zeigt "Nach Updates suchen", ob eine
+               neuere Server-Build-ID verfügbar ist. Optionaler täglicher
+               Panel-Selbst-Update-Timer:
+                 sudo bash scripts/setup-autoupdate.sh
 
   Nützliche Befehle:
     systemctl status asa.service

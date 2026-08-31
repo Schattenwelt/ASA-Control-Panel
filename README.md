@@ -29,6 +29,15 @@ The interface is available in **English and German** (switchable at the top).
   remove them. No manual download — ASA fetches and installs mods itself when
   they're passed via `-mods=` (see [Mods](#mods)).
 - **Launch parameters** (session name, max players, ports, BattlEye, extra args)
+- **Locked ports**: game, query and RCON ports are fixed at install time (`GAME_PORT` /
+  `QUERY_PORT` / `RCON_PORT`) and locked in the panel — the launch form and config
+  editor show them read-only and enforce them on save, so a stray edit can't change
+  the port the firewall forwards to
+- **Version & update check**: the dashboard shows the installed build id and a
+  *Check for updates* button that compares it against the latest public build id
+  (`api.steamcmd.net`)
+- **Panel self-update**: an optional daily systemd timer pulls this repo and
+  redeploys only the panel (see [Auto-update](#auto-update))
 - **Config editor** for both `GameUserSettings.ini` **and** `Game.ini` — grouped
   fields per section *and* a raw editor
 - **RCON, server-local**: uses the ServerAdminPassword; live player list with
@@ -113,6 +122,34 @@ mod and restarting drops it.
 You can find a mod's numeric ID on its CurseForge page; the **CurseForge** link
 next to each entry opens `curseforge.com/projects/<id>`.
 
+## Auto-update
+
+Enable a daily systemd timer that pulls this repo and redeploys the panel (only the
+panel is restarted, not the game server; your accounts, maps, mods and config stay):
+
+```bash
+sudo bash scripts/setup-autoupdate.sh            # runs daily ~04:30
+sudo bash scripts/setup-autoupdate.sh --run-now  # and update immediately
+```
+
+Custom repo/time: `PANEL_REPO_URL=... UPDATE_TIME=03:15 sudo bash scripts/setup-autoupdate.sh`.
+Disable: `sudo systemctl disable --now asa-panel-update.timer`. The panel footer shows
+the running version.
+
+## Ports (fixed & locked)
+
+The game, query and RCON ports are chosen at install time and then **locked** in the
+panel so they can't drift out of sync with your firewall forwarding:
+
+```bash
+GAME_PORT=7777 QUERY_PORT=27015 RCON_PORT=27020 bash install.sh
+```
+
+They are written to `panel.json`, seeded into `GameUserSettings.ini`, and enforced by
+the panel: the launch form shows them read-only, the config editor locks `RCONPort`,
+and both structured and raw saves re-assert the fixed RCON port. Open **7777/UDP**
+(or your chosen game port) in the firewall.
+
 ## Updating the panel
 
 ```bash
@@ -139,6 +176,7 @@ restarts the server and waits for the port.
 install.sh            Full installer (run once in a fresh container)
 scripts/update.sh     Refresh panel code from the repo, restart the panel
 scripts/repair.sh     Ensure RCON is set up in GameUserSettings.ini
+scripts/setup-autoupdate.sh  Install the daily panel self-update timer
 src/                  Panel source (Flask app, RCON, i18n, templates, CSS)
 src/asa-launch.sh     Start wrapper (builds the start line, runs the .exe via Proton)
 src/asa-update.sh     SteamCMD update (Windows depots) + save backups

@@ -486,3 +486,15 @@ input:focus, textarea:focus {
 @media (max-width: 640px) {
   .res-item { flex-basis: 45%; margin-bottom: 12px; }
 }
+
+/* --- Version-Footer --- */
+.foot { text-align: center; padding: 22px 0 34px; opacity: .6; }
+
+/* --- Update-Check-Zeile (Ressourcen) --- */
+.update-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.update-row .res-label { min-width: auto; }
+.update-badge { font-size: .85rem; padding: 2px 8px; border-radius: 6px; }
+.update-badge.ok    { color: var(--ok);   background: rgba(53,213,154,.12); }
+.update-badge.avail { color: var(--accent-ink); background: #e0912f; }
+.update-badge.warn  { color: var(--warn); background: rgba(242,181,58,.12); }

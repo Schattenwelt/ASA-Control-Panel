@@ -84,6 +84,20 @@
         <span class="fname">{{ t('launch_maxplayers') }}</span>
         <input name="max_players" value="{{ rt.max_players }}" inputmode="numeric">
       </label>
+      {% if ports_locked %}
+      <label class="field">
+        <span class="fname">{{ t('launch_port') }}</span>
+        <input value="{{ rt.port }}" inputmode="numeric" disabled>
+      </label>
+      <label class="field">
+        <span class="fname">{{ t('launch_query') }}</span>
+        <input value="{{ rt.query_port }}" inputmode="numeric" disabled>
+      </label>
+      <label class="field">
+        <span class="fname">{{ t('launch_rconport') }}</span>
+        <input value="{{ rt.rcon_port }}" inputmode="numeric" disabled>
+      </label>
+      {% else %}
       <label class="field">
         <span class="fname">{{ t('launch_port') }}</span>
         <input name="port" value="{{ rt.port }}" inputmode="numeric">
@@ -96,11 +110,15 @@
         <span class="fname">{{ t('launch_rconport') }}</span>
         <input name="rcon_port" value="{{ rt.rcon_port }}" inputmode="numeric">
       </label>
+      {% endif %}
       <label class="field check">
         <span class="fname">{{ t('launch_battleye') }}</span>
         <input type="checkbox" name="battleye" {{ 'checked' if rt.battleye }}>
       </label>
     </div>
+    {% if ports_locked %}
+    <p class="muted small" style="margin-top:10px">🔒 {{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }}</p>
+    {% endif %}
     <label class="field" style="margin-top:12px">
       <span class="fname">{{ t('launch_public') }}</span>
       <input name="public_address" value="{{ rt.public_address }}" placeholder="{{ t('launch_public_ph') }}" spellcheck="false">

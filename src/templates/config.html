@@ -32,10 +32,18 @@
           {% if g.name %}<h3 class="subhead mono">[{{ g.name }}]</h3>{% endif %}
           <div class="grid">
             {% for f in g.fields %}
+            {% if ports_locked and f.key == 'RCONPort' %}
+            <label class="field">
+              <span class="fname mono">{{ f.key }} 🔒</span>
+              <input value="{{ fixed_ports.rcon_port }}" spellcheck="false" disabled
+                     title="{{ t('cfg_rcon_locked', rcon=fixed_ports.rcon_port) }}">
+            </label>
+            {% else %}
             <label class="field">
               <span class="fname mono">{{ f.key }}</span>
               <input name="field_{{ f.id }}" value="{{ f.value }}" spellcheck="false">
             </label>
+            {% endif %}
             {% endfor %}
           </div>
         </div>

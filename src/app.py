@@ -48,6 +48,17 @@ RUNTIME_PATH = CONF.get("runtime_path", os.path.join(PANEL_DIR, "runtime.json"))
 MAPS_PATH = CONF.get("maps_path", os.path.join(PANEL_DIR, "maps.json"))
 MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 
+# Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
+APPID = str(CONF.get("appid", "2430930"))
+# Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
+PANEL_VERSION = "1.1.0"
+
+# Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
+# panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
+# Port-Felder werden im Panel gesperrt/erzwungen.
+FIXED_PORTS = {k: int(CONF[k]) for k in ("game_port", "query_port", "rcon_port") if k in CONF}
+PORTS_LOCKED = len(FIXED_PORTS) == 3
+
 app = Flask(__name__)
 app.secret_key = CONF["secret_key"]
 
@@ -112,6 +123,10 @@ def load_runtime():
     merged = dict(RUNTIME_DEFAULTS)
     merged.update({k: data.get(k, v) for k, v in RUNTIME_DEFAULTS.items()})
     merged["mods"] = [str(m) for m in merged.get("mods", []) if str(m).isdigit()]
+    if PORTS_LOCKED:   # feste Ports aus panel.json haben Vorrang
+        merged["port"] = FIXED_PORTS["game_port"]
+        merged["query_port"] = FIXED_PORTS["query_port"]
+        merged["rcon_port"] = FIXED_PORTS["rcon_port"]
     return merged
 
 
@@ -210,11 +225,14 @@ def t(key, **kw):
 app.jinja_env.globals["t"] = t
 app.jinja_env.globals["current_lang"] = current_lang
 app.jinja_env.globals["LANGS"] = LANGS
+app.jinja_env.globals["PANEL_VERSION"] = PANEL_VERSION
 
 
 @app.context_processor
 def inject_me():
-    return {"me": current_user()}
+    return {"me": current_user(),
+            "ports_locked": PORTS_LOCKED,
+            "fixed_ports": FIXED_PORTS}
 
 
 @app.route("/lang/<code>")
@@ -636,6 +654,48 @@ def asa_version():
     return ver
 
 
+def installed_build():
+    """Installierte Build-ID aus steamapps/appmanifest_<APPID>.acf (oder None)."""
+    acf = os.path.join(ASA_DIR, "steamapps", "appmanifest_%s.acf" % APPID)
+    try:
+        with open(acf, "r", errors="ignore") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    m = re.search(r'"buildid"\s+"(\d+)"', text)
+    return m.group(1) if m else None
+
+
+_latest_cache = {"build": None, "ts": 0.0}
+
+
+def latest_build():
+    """Neueste öffentliche Build-ID von api.steamcmd.net (gecacht, 30 min)."""
+    now = time.time()
+    if _latest_cache["build"] and now - _latest_cache["ts"] < 1800:
+        return _latest_cache["build"]
+    try:
+        req = urllib.request.Request("https://api.steamcmd.net/v1/info/%s" % APPID,
+                                     headers={"User-Agent": "asa-panel"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.load(resp)
+        build = str(data["data"][APPID]["depots"]["branches"]["public"]["buildid"])
+        _latest_cache.update(build=build, ts=now)
+        return build
+    except Exception:
+        return None
+
+
+def update_status():
+    """Vergleicht installierte vs. neueste Build-ID.
+    Gibt (installed, latest, status) mit status in current|available|unknown."""
+    inst = installed_build()
+    lat = latest_build()
+    if not inst or not lat:
+        return inst, lat, "unknown"
+    return inst, lat, ("current" if inst == lat else "available")
+
+
 def system_stats():
     """Sammelt CPU/RAM/Disk für den Ressourcen-Monitor + ASA-Version."""
     cpu = _cpu_percent()
@@ -681,6 +741,7 @@ def dashboard():
         connect_game=rt.get("port", 7777),
         connect_kind=kind,
         session_name=rt.get("session_name", "ASA Server"),
+        installed_build=installed_build(),
     )
 
 
@@ -725,6 +786,15 @@ def action():
 def update_logs():
     return jsonify(state=service_active(UPDATE_SERVICE),
                    logs=recent_logs(UPDATE_SERVICE, 80))
+
+
+@app.route("/update-check", methods=["POST"])
+@login_required
+def update_check():
+    if not check_csrf():
+        return jsonify(ok=False, msg=t("csrf_invalid"))
+    inst, lat, st = update_status()
+    return jsonify(ok=True, installed=inst, latest=lat, status=st)
 
 
 # ---------------------------------------------------------------------------
@@ -815,9 +885,14 @@ def maps_launch():
         server_password = request.form.get("server_password", "").strip()
         server_password = server_password.replace("?", "").replace(" ", "").replace("\n", "").replace("\r", "")
         max_players = int(request.form.get("max_players", "70"))
-        port = int(request.form.get("port", "7777"))
-        query_port = int(request.form.get("query_port", "27015"))
-        rcon_port = int(request.form.get("rcon_port", "27020"))
+        if PORTS_LOCKED:   # gesperrte Ports: Formwerte ignorieren, feste erzwingen
+            port = FIXED_PORTS["game_port"]
+            query_port = FIXED_PORTS["query_port"]
+            rcon_port = FIXED_PORTS["rcon_port"]
+        else:
+            port = int(request.form.get("port", "7777"))
+            query_port = int(request.form.get("query_port", "27015"))
+            rcon_port = int(request.form.get("rcon_port", "27020"))
     except ValueError:
         flash(t("launch_bad_number"))
         return redirect(url_for("maps_page"))
@@ -947,6 +1022,7 @@ def config_save():
             if field in request.form:
                 edits[e["id"]] = request.form.get(field, "")
     write_ini(key, apply_ini(entries, edits))
+    enforce_locked_ports(key)
     flash(t("config_saved"))
     return redirect(url_for("config", file=key))
 
@@ -959,8 +1035,18 @@ def config_save_raw():
         return redirect(url_for("config"))
     key = _current_file_key()
     write_ini(key, request.form.get("raw", ""))
+    enforce_locked_ports(key)
     flash(t("raw_saved"))
     return redirect(url_for("config", file=key))
+
+
+def enforce_locked_ports(key):
+    """Bei gesperrten Ports den festen RCON-Port/-Status in der GUS erzwingen –
+    auch wenn er im Editor (strukturiert oder roh) verändert wurde."""
+    if not PORTS_LOCKED or key != "gus":
+        return
+    ini_set(GUS_PATH, "ServerSettings", "RCONEnabled", "True")
+    ini_set(GUS_PATH, "ServerSettings", "RCONPort", str(FIXED_PORTS["rcon_port"]))
 
 
 # ---------------------------------------------------------------------------

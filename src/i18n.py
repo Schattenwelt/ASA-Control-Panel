@@ -65,6 +65,12 @@ TRANSLATIONS = {
     "res_version": {"de": "Version", "en": "Version"},
     "res_server": {"de": "ASA-Server", "en": "ASA server"},
     "res_server_off": {"de": "aus", "en": "off"},
+    "update_check_btn": {"de": "Nach Updates suchen", "en": "Check for updates"},
+    "update_checking": {"de": "Prüfe …", "en": "Checking …"},
+    "update_current": {"de": "Server ist aktuell", "en": "Server is up to date"},
+    "update_available": {"de": "Update verfügbar", "en": "Update available"},
+    "update_unknown": {"de": "Status unbekannt", "en": "Status unknown"},
+    "build_label": {"de": "Build", "en": "Build"},
     "players_online": {"de": "Spieler online", "en": "Players online"},
     "server_log": {"de": "Server-Log", "en": "Server log"},
     "auto_refresh": {"de": "aktualisiert automatisch", "en": "auto-refreshing"},
@@ -138,6 +144,15 @@ TRANSLATIONS = {
     "launch_port": {"de": "Spielport (Port)", "en": "Game port (Port)"},
     "launch_query": {"de": "Query-Port", "en": "Query port"},
     "launch_rconport": {"de": "RCON-Port", "en": "RCON port"},
+    "ports_locked_title": {"de": "Ports (gesperrt)", "en": "Ports (locked)"},
+    "ports_locked_note": {
+        "de": "Beim Installieren festgelegt und hier gesperrt: Spiel-Port {game}/UDP, Query-Port {query}, RCON-Port {rcon} (nur intern).",
+        "en": "Set at install time and locked here: game port {game}/UDP, query port {query}, RCON port {rcon} (internal only).",
+    },
+    "cfg_rcon_locked": {
+        "de": "RCON-Port ist gesperrt (beim Installieren festgelegt: {rcon}) und wird beim Speichern erzwungen.",
+        "en": "RCON port is locked (set at install: {rcon}) and enforced on save.",
+    },
     "launch_battleye": {"de": "BattlEye aktiv", "en": "BattlEye enabled"},
     "launch_public": {"de": "Öffentliche Adresse (optional)", "en": "Public address (optional)"},
     "launch_public_ph": {
