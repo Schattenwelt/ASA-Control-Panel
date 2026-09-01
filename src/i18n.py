@@ -95,6 +95,10 @@ TRANSLATIONS = {
               "RCON is enabled on launch anyway."},
     "nobody_online": {"de": "Niemand online.", "en": "Nobody online."},
     "rcon_unreachable": {"de": "RCON nicht erreichbar", "en": "RCON not reachable"},
+    "rcon_starting": {
+        "de": "RCON noch nicht erreichbar – der Server startet bzw. lädt die Welt. Beim Erststart kann das einige Minuten dauern.",
+        "en": "RCON not reachable yet – the server is still starting/loading the world. The first start can take a few minutes.",
+    },
     "kick": {"de": "Kicken", "en": "Kick"},
     "ban": {"de": "Bannen", "en": "Ban"},
     "confirm_kick": {"de": "Spieler {name} kicken?", "en": "Kick player {name}?"},

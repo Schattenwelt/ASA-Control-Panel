@@ -1140,7 +1140,13 @@ def players():
         with rcon_connect() as r:
             return jsonify(enabled=True, reachable=True, players=r.players())
     except (RCONError, OSError) as e:
-        return jsonify(enabled=True, reachable=False, players=[], note=str(e))
+        # Server-Prozess läuft, aber RCON nimmt noch keine Verbindung an – das ist
+        # beim Hochfahren/Weltladen normal (Port noch zu). Freundlicher Hinweis statt
+        # rohem "[Errno 111] Connection refused".
+        refused = isinstance(e, ConnectionRefusedError) or "refused" in str(e).lower() \
+            or "reset" in str(e).lower() or "timed out" in str(e).lower()
+        note = t("rcon_starting") if refused else str(e)
+        return jsonify(enabled=True, reachable=False, players=[], note=note)
 
 
 @app.route("/rcon", methods=["POST"])
