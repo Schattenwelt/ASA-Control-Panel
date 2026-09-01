@@ -86,17 +86,23 @@ echo steam steam/question select "I AGREE" | debconf-set-selections
 echo steam steam/license note '' | debconf-set-selections
 
 # steamcmd + 32-bit-Libs; Proton bringt sein eigenes Wine mit, braucht aber ein
-# paar System-Libs. Wichtig: libvulkan1 – GE-Proton lädt beim Start libvulkan.so.1
-# (im Python-Wrapper), auch für den Headless-Dedicated-Server; fehlt sie, crasht
-# Proton mit "libvulkan.so.1: cannot open shared object file". curl/tar für GE-Proton.
+# paar System-Libs. Wichtig für ASA (UE5/DX12 -> VKD3D -> Vulkan) im GPU-losen
+# Container:
+#   * libvulkan1        = Vulkan-Loader (sonst crasht Proton beim Start an libvulkan.so.1)
+#   * mesa-vulkan-drivers = Software-Vulkan (lavapipe/llvmpipe) als Vulkan-GERÄT;
+#     ohne ein Device hängt der Server beim Rendering-Init, bevor er startet.
+# curl/tar für GE-Proton.
 apt-get install -y --no-install-recommends \
     steamcmd lib32gcc-s1 lib32stdc++6 \
     python3 python3-venv python3-pip \
     sudo curl tar xz-utils locales procps \
     libfreetype6 libfreetype6:i386 \
-    libvulkan1 || apt-get install -y --no-install-recommends libvulkan1
-# libvulkan1 separat absichern (unterschiedliche Paketstände), i386-Variante best effort
-apt-get install -y --no-install-recommends libvulkan1:i386 2>/dev/null || true
+    libvulkan1 mesa-vulkan-drivers || {
+        apt-get install -y --no-install-recommends libvulkan1
+        apt-get install -y --no-install-recommends mesa-vulkan-drivers
+    }
+# 32-bit-Varianten best effort (Server ist 64-bit, aber schadet nicht)
+apt-get install -y --no-install-recommends libvulkan1:i386 mesa-vulkan-drivers:i386 2>/dev/null || true
 
 locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
 

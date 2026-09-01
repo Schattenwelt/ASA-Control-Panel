@@ -14,16 +14,18 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Bitte als root ausführen." >&2; exit 1; }
 ASA_USER="asa"
 
-echo "==> Installiere fehlende Proton-Abhängigkeit (libvulkan1) ..."
+echo "==> Installiere fehlende Proton-Abhängigkeiten (Vulkan-Loader + Software-Vulkan) ..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y --no-install-recommends libvulkan1 || {
-    echo "libvulkan1 nicht gefunden – versuche universe zu aktivieren ..."
+# libvulkan1 = Loader, mesa-vulkan-drivers = Software-Vulkan (lavapipe) als GERÄT.
+# Ohne ein Vulkan-Device hängt ASA (UE5/DX12->VKD3D->Vulkan) beim Rendering-Init.
+apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers || {
+    echo "Pakete nicht gefunden – aktiviere universe und versuche erneut ..."
     apt-get install -y --no-install-recommends software-properties-common
     add-apt-repository -y universe && apt-get update -y
-    apt-get install -y --no-install-recommends libvulkan1
+    apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers
 }
-apt-get install -y --no-install-recommends libvulkan1:i386 2>/dev/null || true
+apt-get install -y --no-install-recommends libvulkan1:i386 mesa-vulkan-drivers:i386 2>/dev/null || true
 
 echo "==> Erneuere sudo-Regel (systemctl + journalctl-Lesen fürs Server-Log) ..."
 SUDO_FILE=/etc/sudoers.d/asa-panel

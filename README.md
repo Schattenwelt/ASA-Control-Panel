@@ -62,6 +62,8 @@ The interface is available in **English and German** (switchable at the top).
   ```
   This is host-wide and cannot be set from inside an unprivileged LXC. Giving the
   container some swap (`pct set <VMID> --swap 8192`) helps absorb the memory
+
+- The installer also installs a software Vulkan driver (`mesa-vulkan-drivers`, lavapipe). ASA is a UE5/DX12 title that Proton translates to Vulkan; in a GPU-less container the server needs a Vulkan device to get past render init, even though a dedicated server renders nothing. `libvulkan1` alone (the loader) is not enough.
   spike during first-time world generation.
 
 ## Installation
