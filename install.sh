@@ -86,12 +86,17 @@ echo steam steam/question select "I AGREE" | debconf-set-selections
 echo steam steam/license note '' | debconf-set-selections
 
 # steamcmd + 32-bit-Libs; Proton bringt sein eigenes Wine mit, braucht aber ein
-# paar System-Libs (freetype u. a.). curl/tar zum Laden von GE-Proton.
+# paar System-Libs. Wichtig: libvulkan1 – GE-Proton lädt beim Start libvulkan.so.1
+# (im Python-Wrapper), auch für den Headless-Dedicated-Server; fehlt sie, crasht
+# Proton mit "libvulkan.so.1: cannot open shared object file". curl/tar für GE-Proton.
 apt-get install -y --no-install-recommends \
     steamcmd lib32gcc-s1 lib32stdc++6 \
     python3 python3-venv python3-pip \
     sudo curl tar xz-utils locales procps \
-    libfreetype6 libfreetype6:i386
+    libfreetype6 libfreetype6:i386 \
+    libvulkan1 || apt-get install -y --no-install-recommends libvulkan1
+# libvulkan1 separat absichern (unterschiedliche Paketstände), i386-Variante best effort
+apt-get install -y --no-install-recommends libvulkan1:i386 2>/dev/null || true
 
 locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
 
@@ -351,7 +356,7 @@ chmod 640 "$PANEL_DIR/runtime.json" "$PANEL_DIR/maps.json" "$PANEL_DIR/mods.json
 msg "Setze eingeschränkte sudo-Rechte für das Panel ..."
 SUDO_FILE=/etc/sudoers.d/asa-panel
 cat > "$SUDO_FILE" <<'SUDO'
-asa ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now asa.service, /usr/bin/systemctl disable --now asa.service, /usr/bin/systemctl enable asa.service, /usr/bin/systemctl disable asa.service, /usr/bin/systemctl restart asa.service, /usr/bin/systemctl reset-failed asa.service, /usr/bin/systemctl start asa-update.service
+asa ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now asa.service, /usr/bin/systemctl disable --now asa.service, /usr/bin/systemctl enable asa.service, /usr/bin/systemctl disable asa.service, /usr/bin/systemctl restart asa.service, /usr/bin/systemctl reset-failed asa.service, /usr/bin/systemctl start asa-update.service, /usr/bin/journalctl -u asa.service *, /usr/bin/journalctl -u asa-update.service *
 SUDO
 chmod 440 "$SUDO_FILE"
 visudo -cf "$SUDO_FILE" >/dev/null || die "sudoers-Regel ungültig."

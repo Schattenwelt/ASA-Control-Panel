@@ -146,8 +146,12 @@ TRANSLATIONS = {
     "launch_rconport": {"de": "RCON-Port", "en": "RCON port"},
     "ports_locked_title": {"de": "Ports (gesperrt)", "en": "Ports (locked)"},
     "ports_locked_note": {
-        "de": "Beim Installieren festgelegt und hier gesperrt: Spiel-Port {game}/UDP, Query-Port {query}, RCON-Port {rcon} (nur intern).",
-        "en": "Set at install time and locked here: game port {game}/UDP, query port {query}, RCON port {rcon} (internal only).",
+        "de": "Ports sind beim Installieren festgelegt und hier gesperrt – Spiel-Port {game}/UDP, RCON-Port {rcon} (nur intern).",
+        "en": "Ports are set at install time and locked here – game port {game}/UDP, RCON port {rcon} (internal only).",
+    },
+    "cfg_rcon_managed": {
+        "de": "RCON wird vom Panel verwaltet und ist immer aktiv (RCONEnabled/RCONPort werden hier nicht angezeigt).",
+        "en": "RCON is managed by the panel and always on (RCONEnabled/RCONPort are hidden here).",
     },
     "cfg_rcon_locked": {
         "de": "RCON-Port ist gesperrt (beim Installieren festgelegt: {rcon}) und wird beim Speichern erzwungen.",

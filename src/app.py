@@ -253,6 +253,10 @@ def run(cmd, timeout=30):
         return p.returncode, (p.stdout + p.stderr).strip()
     except subprocess.TimeoutExpired:
         return 1, "Zeitüberschreitung beim Ausführen des Befehls."
+    except (FileNotFoundError, OSError) as e:
+        # z. B. 'sudo' oder 'journalctl' nicht vorhanden -> nicht crashen,
+        # sondern als Fehlschlag melden (Aufrufer haben Fallbacks)
+        return 1, str(e)
 
 
 def service_active(name):
@@ -285,9 +289,17 @@ def stop_service():
 
 
 def recent_logs(name, lines=60):
-    rc, out = run(["journalctl", "-u", name, "-n", str(lines),
-                   "--no-pager", "-o", "short-iso"])
-    return out if rc == 0 else "Keine Logs verfügbar (Rechte prüfen)."
+    """Journal einer Unit lesen. Das Panel läuft als unprivilegierter User, der das
+    System-Journal i. d. R. nicht sehen darf – daher zuerst über die schmale
+    sudo-Regel, dann als Fallback direkt (falls die systemd-journal-Gruppe reicht)."""
+    cmd = ["journalctl", "-u", name, "-n", str(lines), "--no-pager", "-o", "short-iso"]
+    rc, out = run(["sudo", "-n", *cmd])
+    if rc == 0 and out.strip() and "-- No entries --" not in out:
+        return out
+    rc2, out2 = run(cmd)
+    if rc2 == 0 and out2.strip() and "-- No entries --" not in out2:
+        return out2
+    return "Keine Logs verfügbar (Rechte prüfen)."
 
 
 def _tail_file(path, lines):
@@ -332,13 +344,13 @@ def game_log_tail(lines=60):
 
 
 def server_log(lines=60):
-    """Server-Log fürs Dashboard: bevorzugt journald (systemd/Proton-Wrapper),
-    fällt aber auf die ASA-Logdatei zurück, wenn journald leer ist – z. B. weil
-    der Container-Journal flüchtig ist und der Server gerade nicht läuft."""
-    rc, out = run(["journalctl", "-u", SERVICE, "-n", str(lines),
-                   "--no-pager", "-o", "short-iso"])
-    j = out if rc == 0 else ""
-    if j.strip() and "-- No entries --" not in j and "No journal files" not in j:
+    """Server-Log fürs Dashboard: bevorzugt das Unit-Journal (systemd/Proton-Wrapper –
+    zeigt auch Startfehler wie fehlende Libs), fällt aber auf die ASA-Logdatei zurück,
+    wenn journald leer ist (im LXC oft flüchtig)."""
+    j = recent_logs(SERVICE, lines)
+    bad = (not j.strip()) or ("-- No entries --" in j) or ("No journal files" in j) \
+        or ("Keine Logs verfügbar" in j)
+    if not bad:
         return j
     g = game_log_tail(lines)
     if g.strip():

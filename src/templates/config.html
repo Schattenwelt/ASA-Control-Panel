@@ -16,7 +16,8 @@
 
 {% if file_key == 'gus' %}
 <div class="notice lock">
-  {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }} {% endif %}{{ t('cfg_banner_rcon', rcon=rcon_port_fixed) }}
+  {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }}{% endif %}
+  {{ t('cfg_rcon_managed') }}
 </div>
 {% endif %}
 
@@ -38,18 +39,8 @@
           {% if g.name %}<h3 class="subhead mono">[{{ g.name }}]</h3>{% endif %}
           <div class="grid">
             {% for f in g.fields %}
-            {% if f.key == 'RCONPort' %}
-            <label class="field">
-              <span class="fname mono">{{ f.key }} 🔒</span>
-              <input value="{{ rcon_port_fixed }}" spellcheck="false" disabled
-                     title="{{ t('cfg_rcon_locked', rcon=rcon_port_fixed) }}">
-            </label>
-            {% elif f.key == 'RCONEnabled' %}
-            <label class="field">
-              <span class="fname mono">{{ f.key }} 🔒</span>
-              <input value="True" spellcheck="false" disabled
-                     title="{{ t('cfg_rcon_enabled_locked') }}">
-            </label>
+            {% if f.key in ('RCONPort', 'RCONEnabled') %}
+            {# vom Panel verwaltet – wird ausgeblendet (siehe Hinweis oben) #}
             {% else %}
             <label class="field">
               <span class="fname mono">{{ f.key }}</span>
