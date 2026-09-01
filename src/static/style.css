@@ -76,6 +76,7 @@ a { color: var(--blue); text-decoration: none; }
   background: var(--bg-2); padding: 10px 14px; border-radius: 10px;
   margin-bottom: 18px; font-size: .93rem; color: var(--muted);
 }
+.notice.lock { background: rgba(242,181,58,.06); color: var(--text); }
 
 /* ---- Beacon-Karte (Signature) ---- */
 .beacon-card {

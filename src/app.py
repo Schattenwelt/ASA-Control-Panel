@@ -232,7 +232,8 @@ app.jinja_env.globals["PANEL_VERSION"] = PANEL_VERSION
 def inject_me():
     return {"me": current_user(),
             "ports_locked": PORTS_LOCKED,
-            "fixed_ports": FIXED_PORTS}
+            "fixed_ports": FIXED_PORTS,
+            "rcon_port_fixed": effective_rcon_port()}
 
 
 @app.route("/lang/<code>")
@@ -287,6 +288,62 @@ def recent_logs(name, lines=60):
     rc, out = run(["journalctl", "-u", name, "-n", str(lines),
                    "--no-pager", "-o", "short-iso"])
     return out if rc == 0 else "Keine Logs verfügbar (Rechte prüfen)."
+
+
+def _tail_file(path, lines):
+    """Letzte n Zeilen einer (ggf. großen) Datei effizient lesen."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            data = b""
+            block = 8192
+            while size > 0 and data.count(b"\n") <= lines:
+                step = min(block, size)
+                size -= step
+                fh.seek(size)
+                data = fh.read(step) + data
+        text = data.decode("utf-8", "ignore")
+        return "\n".join(text.splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
+def game_log_tail(lines=60):
+    """Letzte Zeilen der ASA-eigenen Logdatei (überlebt Reboots; journald im LXC
+    ist oft flüchtig). Fällt auf das neueste Log-Backup zurück."""
+    logs_dir = os.path.join(ASA_DIR, "ShooterGame", "Saved", "Logs")
+    active = os.path.join(logs_dir, "ShooterGame.log")
+    if os.path.isfile(active):
+        tail = _tail_file(active, lines)
+        if tail.strip():
+            return tail
+    try:
+        backups = sorted(
+            (os.path.join(logs_dir, f) for f in os.listdir(logs_dir) if f.endswith(".log")),
+            key=os.path.getmtime, reverse=True)
+    except OSError:
+        backups = []
+    for path in backups:
+        tail = _tail_file(path, lines)
+        if tail.strip():
+            return tail
+    return ""
+
+
+def server_log(lines=60):
+    """Server-Log fürs Dashboard: bevorzugt journald (systemd/Proton-Wrapper),
+    fällt aber auf die ASA-Logdatei zurück, wenn journald leer ist – z. B. weil
+    der Container-Journal flüchtig ist und der Server gerade nicht läuft."""
+    rc, out = run(["journalctl", "-u", SERVICE, "-n", str(lines),
+                   "--no-pager", "-o", "short-iso"])
+    j = out if rc == 0 else ""
+    if j.strip() and "-- No entries --" not in j and "No journal files" not in j:
+        return j
+    g = game_log_tail(lines)
+    if g.strip():
+        return g
+    return j.strip() or "Keine Logs verfügbar."
 
 
 # ---------------------------------------------------------------------------
@@ -731,7 +788,7 @@ def dashboard():
         update_state=service_active(UPDATE_SERVICE),
         enabled=service_enabled(SERVICE),
         rcon_enabled=rcon_config()[0],
-        logs=recent_logs(SERVICE),
+        logs=server_log(),
         active_map=map_name_for(rt["map"]),
         mods_count=len(rt["mods"]),
         service=SERVICE,
@@ -753,7 +810,7 @@ def status():
         update=service_active(UPDATE_SERVICE),
         enabled=service_enabled(SERVICE),
         stats=system_stats(),
-        logs=recent_logs(SERVICE, 60),
+        logs=server_log(60),
     )
 
 
@@ -1022,7 +1079,7 @@ def config_save():
             if field in request.form:
                 edits[e["id"]] = request.form.get(field, "")
     write_ini(key, apply_ini(entries, edits))
-    enforce_locked_ports(key)
+    enforce_rcon(key)
     flash(t("config_saved"))
     return redirect(url_for("config", file=key))
 
@@ -1035,18 +1092,24 @@ def config_save_raw():
         return redirect(url_for("config"))
     key = _current_file_key()
     write_ini(key, request.form.get("raw", ""))
-    enforce_locked_ports(key)
+    enforce_rcon(key)
     flash(t("raw_saved"))
     return redirect(url_for("config", file=key))
 
 
-def enforce_locked_ports(key):
-    """Bei gesperrten Ports den festen RCON-Port/-Status in der GUS erzwingen –
-    auch wenn er im Editor (strukturiert oder roh) verändert wurde."""
-    if not PORTS_LOCKED or key != "gus":
+def effective_rcon_port():
+    """Effektiver RCON-Port: fester Port aus panel.json, sonst der aus runtime.json."""
+    return FIXED_PORTS["rcon_port"] if PORTS_LOCKED else load_runtime()["rcon_port"]
+
+
+def enforce_rcon(key):
+    """RCON ist fürs Panel Pflicht: RCONEnabled immer True, RCONPort auf den
+    effektiven Port festnageln – unabhängig davon, ob die Spiel-Ports gesperrt sind.
+    Damit lässt sich RCON über den Config-Editor weder abschalten noch verbiegen."""
+    if key != "gus":
         return
     ini_set(GUS_PATH, "ServerSettings", "RCONEnabled", "True")
-    ini_set(GUS_PATH, "ServerSettings", "RCONPort", str(FIXED_PORTS["rcon_port"]))
+    ini_set(GUS_PATH, "ServerSettings", "RCONPort", str(effective_rcon_port()))
 
 
 # ---------------------------------------------------------------------------

@@ -153,6 +153,14 @@ TRANSLATIONS = {
         "de": "RCON-Port ist gesperrt (beim Installieren festgelegt: {rcon}) und wird beim Speichern erzwungen.",
         "en": "RCON port is locked (set at install: {rcon}) and enforced on save.",
     },
+    "cfg_rcon_enabled_locked": {
+        "de": "RCON wird vom Panel gebraucht und ist dauerhaft aktiv – kann hier nicht abgeschaltet werden.",
+        "en": "RCON is required by the panel and always on – it can't be disabled here.",
+    },
+    "cfg_banner_rcon": {
+        "de": "RCON wird vom Panel verwaltet und ist immer aktiv – RCONEnabled und RCONPort ({rcon}) sind gesperrt. Das ServerAdminPassword ist zugleich das RCON-Passwort und kann geändert werden (danach Server neu starten).",
+        "en": "RCON is managed by the panel and always on – RCONEnabled and RCONPort ({rcon}) are locked. The ServerAdminPassword is also the RCON password and may be changed (restart the server afterwards).",
+    },
     "launch_battleye": {"de": "BattlEye aktiv", "en": "BattlEye enabled"},
     "launch_public": {"de": "Öffentliche Adresse (optional)", "en": "Public address (optional)"},
     "launch_public_ph": {

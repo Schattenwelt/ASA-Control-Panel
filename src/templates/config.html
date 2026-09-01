@@ -14,6 +14,12 @@
 <div class="notice">{{ t('cfg_notice', path=ini_path) }}</div>
 {% endif %}
 
+{% if file_key == 'gus' %}
+<div class="notice lock">
+  {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }} {% endif %}{{ t('cfg_banner_rcon', rcon=rcon_port_fixed) }}
+</div>
+{% endif %}
+
 <div class="tabs">
   <button class="tab on" data-tab="form">{{ t('tab_settings') }}</button>
   <button class="tab" data-tab="raw">{{ t('tab_raw') }}</button>
@@ -32,11 +38,17 @@
           {% if g.name %}<h3 class="subhead mono">[{{ g.name }}]</h3>{% endif %}
           <div class="grid">
             {% for f in g.fields %}
-            {% if ports_locked and f.key == 'RCONPort' %}
+            {% if f.key == 'RCONPort' %}
             <label class="field">
               <span class="fname mono">{{ f.key }} 🔒</span>
-              <input value="{{ fixed_ports.rcon_port }}" spellcheck="false" disabled
-                     title="{{ t('cfg_rcon_locked', rcon=fixed_ports.rcon_port) }}">
+              <input value="{{ rcon_port_fixed }}" spellcheck="false" disabled
+                     title="{{ t('cfg_rcon_locked', rcon=rcon_port_fixed) }}">
+            </label>
+            {% elif f.key == 'RCONEnabled' %}
+            <label class="field">
+              <span class="fname mono">{{ f.key }} 🔒</span>
+              <input value="True" spellcheck="false" disabled
+                     title="{{ t('cfg_rcon_enabled_locked') }}">
             </label>
             {% else %}
             <label class="field">
