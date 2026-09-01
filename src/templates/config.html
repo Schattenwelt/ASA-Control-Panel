@@ -15,7 +15,7 @@
 {% endif %}
 
 {% if file_key == 'gus' %}
-<div class="notice lock">
+<div class="notice">
   {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }}{% else %}{{ t('cfg_rcon_managed') }}{% endif %}
 </div>
 {% endif %}
