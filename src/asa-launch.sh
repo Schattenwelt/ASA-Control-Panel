@@ -96,6 +96,20 @@ export STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_ROOT"
 mkdir -p "$COMPAT_DATA"
 cd "$(dirname "$BIN")"
 
+# Erststart: Proton-Prefix anlegen, BEVOR die Server-.exe gestartet wird.
+# Sonst baut der erste 'proton run <exe>' nur den Prefix auf und die .exe läuft
+# noch nicht (bekanntes Proton-Verhalten – man müsste sonst zweimal starten).
+if [ ! -f "$COMPAT_DATA/pfx/system.reg" ]; then
+    echo "[asa-launch] Erststart erkannt – initialisiere Proton-Prefix (einmalig, dauert kurz) ..."
+    "$PROTON_DIR/proton" run wineboot --init >/dev/null 2>&1 || true
+    # warten, bis der Prefix wirklich steht
+    for _ in $(seq 1 30); do
+        [ -f "$COMPAT_DATA/pfx/system.reg" ] && break
+        sleep 1
+    done
+    echo "[asa-launch] Prefix initialisiert."
+fi
+
 echo "[asa-launch] Karte=$MAP  Mods=${MODS:-–}  Port=$PORT/$QUERY  RCON=$RCONP  MaxPlayers=$MAXP"
 echo "[asa-launch] Proton=$PROTON_DIR  Prefix=$COMPAT_DATA"
 exec "$PROTON_DIR/proton" run "$BIN" "$OPTS" "${ARGS[@]}"
