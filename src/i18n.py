@@ -95,6 +95,10 @@ TRANSLATIONS = {
               "RCON is enabled on launch anyway."},
     "nobody_online": {"de": "Niemand online.", "en": "Nobody online."},
     "rcon_unreachable": {"de": "RCON nicht erreichbar", "en": "RCON not reachable"},
+    "rcon_starting": {
+        "de": "RCON noch nicht erreichbar – der Server startet bzw. lädt die Welt. Beim Erststart kann das einige Minuten dauern.",
+        "en": "RCON not reachable yet – the server is still starting/loading the world. The first start can take a few minutes.",
+    },
     "kick": {"de": "Kicken", "en": "Kick"},
     "ban": {"de": "Bannen", "en": "Ban"},
     "confirm_kick": {"de": "Spieler {name} kicken?", "en": "Kick player {name}?"},
@@ -146,12 +150,24 @@ TRANSLATIONS = {
     "launch_rconport": {"de": "RCON-Port", "en": "RCON port"},
     "ports_locked_title": {"de": "Ports (gesperrt)", "en": "Ports (locked)"},
     "ports_locked_note": {
-        "de": "Beim Installieren festgelegt und hier gesperrt: Spiel-Port {game}/UDP, Query-Port {query}, RCON-Port {rcon} (nur intern).",
-        "en": "Set at install time and locked here: game port {game}/UDP, query port {query}, RCON port {rcon} (internal only).",
+        "de": "Ports sind beim Installieren festgelegt und hier gesperrt – Spiel-Port {game}/UDP, RCON-Port {rcon} (nur intern).",
+        "en": "Ports are set at install time and locked here – game port {game}/UDP, RCON port {rcon} (internal only).",
+    },
+    "cfg_rcon_managed": {
+        "de": "RCON wird vom Panel verwaltet und ist immer aktiv (RCONEnabled/RCONPort werden hier nicht angezeigt).",
+        "en": "RCON is managed by the panel and always on (RCONEnabled/RCONPort are hidden here).",
     },
     "cfg_rcon_locked": {
         "de": "RCON-Port ist gesperrt (beim Installieren festgelegt: {rcon}) und wird beim Speichern erzwungen.",
         "en": "RCON port is locked (set at install: {rcon}) and enforced on save.",
+    },
+    "cfg_rcon_enabled_locked": {
+        "de": "RCON wird vom Panel gebraucht und ist dauerhaft aktiv – kann hier nicht abgeschaltet werden.",
+        "en": "RCON is required by the panel and always on – it can't be disabled here.",
+    },
+    "cfg_banner_rcon": {
+        "de": "RCON wird vom Panel verwaltet und ist immer aktiv – RCONEnabled und RCONPort ({rcon}) sind gesperrt. Das ServerAdminPassword ist zugleich das RCON-Passwort und kann geändert werden (danach Server neu starten).",
+        "en": "RCON is managed by the panel and always on – RCONEnabled and RCONPort ({rcon}) are locked. The ServerAdminPassword is also the RCON password and may be changed (restart the server afterwards).",
     },
     "launch_battleye": {"de": "BattlEye aktiv", "en": "BattlEye enabled"},
     "launch_public": {"de": "Öffentliche Adresse (optional)", "en": "Public address (optional)"},
@@ -298,6 +314,10 @@ TRANSLATIONS = {
     "user_delete_last": {"de": "Der letzte Benutzer kann nicht gelöscht werden.",
                          "en": "The last user cannot be deleted."},
     "user_deleted": {"de": "Benutzer '{name}' gelöscht.", "en": "User '{name}' deleted."},
+    "config_write_error": {
+        "de": "Konnte die Datei nicht speichern (Rechte?): {err}",
+        "en": "Could not save the file (permissions?): {err}",
+    },
     "config_saved": {"de": "Konfiguration gespeichert. Für die Übernahme den Server neu starten.",
                      "en": "Configuration saved. Restart the server to apply."},
     "raw_saved": {"de": "Rohdatei gespeichert. Für die Übernahme den Server neu starten.",

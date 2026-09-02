@@ -1,82 +1,41 @@
-# ASA Control Panel
+# ASA Control Panel (Docker)
 
-A lightweight, self-hosted web panel to install, configure and control an
-**ARK: Survival Ascended dedicated server** inside a Proxmox LXC container —
-with a login-protected UI, live status, one-click update, a config editor,
-**map and mod management** and RCON (player list, save, clean shutdown,
-broadcasts).
+A lightweight, self-hosted web panel to run and control an **ARK: Survival
+Ascended dedicated server** inside a Proxmox LXC — via **Docker**. The server
+itself runs in the well-maintained `ghcr.io/justamply/asa-linux-server` image
+(which bundles a working GE-Proton + Steam-Runtime stack), so you avoid the
+Proton/Steamworks headaches of a bare-metal setup. The panel controls the
+container: start / stop / restart / update, a config editor, **map & mod
+management**, RCON (player list, save, clean shutdown, broadcasts), a version /
+update check and an optional daily panel self-update.
 
-ASA has no native Linux server, so this panel runs the Windows server binary
-(`ArkAscendedServer.exe`) through **GE-Proton**. Mods are handled the ASA way:
-you list **CurseForge** IDs and the server downloads them itself on start.
-
-The interface is available in **English and German** (switchable at the top).
+Interface available in **English and German**.
 
 > Unofficial community project. Not affiliated with Studio Wildcard / Snail
-> Games. "ARK: Survival Ascended" is a trademark of its respective owner.
+> Games. Server image by JustAmply (based on mschnitzer's work).
 
-## Features
+## Why Docker
 
-- Server control: **start / restart / stop** and **update** (SteamCMD, app 2430930)
-- **Runs via Proton**: the installer sets up GE-Proton and a compat prefix; the
-  start wrapper launches the `.exe` through it — you don't touch any of that
-- **Reboot-aware**: the server only comes back after a reboot if it was running
-  before (start = autostart on, stop = off); the LXC itself starts via Proxmox
-  `onboot`
-- **Map management**: pick official `_WP` maps with one click, add custom/mod
-  maps (map code + optional mod ID). ASA's official maps are free.
-- **Mod management**: enter **CurseForge mod IDs** in load order, reorder and
-  remove them. No manual download — ASA fetches and installs mods itself when
-  they're passed via `-mods=` (see [Mods](#mods)).
-- **Launch parameters** (session name, max players, ports, BattlEye, extra args)
-- **Locked ports**: game, query and RCON ports are fixed at install time (`GAME_PORT` /
-  `QUERY_PORT` / `RCON_PORT`) and locked in the panel — the launch form and config
-  editor show them read-only and enforce them on save, so a stray edit can't change
-  the port the firewall forwards to
-- **Version & update check**: the dashboard shows the installed build id and a
-  *Check for updates* button that compares it against the latest public build id
-  (`api.steamcmd.net`)
-- **Panel self-update**: an optional daily systemd timer pulls this repo and
-  redeploys only the panel (see [Auto-update](#auto-update))
-- **Config editor** for both `GameUserSettings.ini` **and** `Game.ini` — grouped
-  fields per section *and* a raw editor
-- **RCON, server-local**: uses the ServerAdminPassword; live player list with
-  **kick / ban**, save world, "save & stop" and broadcasts
-- **Connect box** on the dashboard: shows the session name to search for in the
-  in-game server list plus the direct-connect line (`open IP:port`), and
-  auto-detects the public IP
-- **Multiple user accounts**: create / reset / delete; all equal
-- Runs as an unprivileged user behind a narrow `sudo` allow-list
+Running ASA (a Windows/DX12 title) directly under Proton in an unprivileged LXC
+hits several walls — missing Vulkan, fsync/futex, and ultimately a Steamworks
+`abort()` at startup. The Docker image ships a known-good runtime combination
+that boots reliably, so this panel drives that container instead of wrestling
+Proton by hand.
 
 ## Requirements
 
-- A **Proxmox LXC container** (Ubuntu 24.04, unprivileged is fine),
-  **12–16 GB RAM recommended** (min. 10 GB; more depending on map/mods),
-  **~60+ GB disk** (ASA is large)
-- Root access inside the container
-- On the **Proxmox host**: `vm.max_map_count` must be high enough (ASA/UE5 maps
-  a huge number of memory regions). If the installer warns, set it on the host:
+- A **Proxmox LXC** (Ubuntu 24.04, unprivileged is fine) with **`nesting=1`**
+  (host: `pct set <CTID> --features nesting=1`), **~13 GB RAM**, **~40+ GB disk**.
+- On the **Proxmox host**: `vm.max_map_count` high enough for UE5:
   ```bash
   echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-asa.conf
   sysctl -p /etc/sysctl.d/99-asa.conf
   ```
-  This is host-wide and cannot be set from inside an unprivileged LXC. Giving the
-  container some swap (`pct set <VMID> --swap 8192`) helps absorb the memory
-  spike during first-time world generation.
+- Docker is installed automatically by the installer.
 
 ## Installation
 
-Create the container on the Proxmox host (example):
-
-```bash
-pct create 211 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
-  --hostname asa --cores 6 --memory 16384 --swap 8192 \
-  --rootfs local-lvm:80 --net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  --unprivileged 1 --features nesting=1 --onboot 1
-pct start 211 && pct enter 211
-```
-
-Inside the container:
+Create a fresh container on the host, then inside it:
 
 ```bash
 git clone https://github.com/Schattenwelt/ASA-Control-Panel.git
@@ -84,139 +43,82 @@ cd ASA-Control-Panel
 bash install.sh
 ```
 
-The installer asks for a panel username and password (or run it non-interactively
-with `PANEL_USER=... PANEL_PASS=... bash install.sh`). The panel listens on
-**port 80** by default; override with `PANEL_PORT=8080 bash install.sh`. Pin a
-specific GE-Proton release with `PROTON_VERSION=GE-Proton9-20 bash install.sh`
-(default: latest).
+The installer asks for a panel username/password (or run non-interactively with
+`PANEL_USER=... PANEL_PASS=... bash install.sh`). Panel port defaults to 80
+(`PANEL_PORT=8080 bash install.sh`); game/RCON ports via
+`GAME_PORT=7777 RCON_PORT=27020 bash install.sh`; server image via
+`ASA_IMAGE=...`.
 
-Then open `http://<container-ip>`, pick a map under **Maps**, add CurseForge IDs
-under **Mods**, review settings under **Config**, and hit **Start**. The first
-start takes a while (Proton prefix warm-up + world generation).
+Open `http://<container-ip>`, pick a map, add CurseForge mod IDs, then **Start**.
+The first start downloads SteamCMD + the server files (~15–30 GB) into
+`/opt/asa-data` and generates the world — watch progress under **Server-Log** or
+`docker logs -f asa-server-1`. Open **7777/UDP** in your firewall.
 
-Port to open in your firewall: **7777/UDP** (game). ASA uses the game port for
-the server list (EOS/crossplay) — no separate Steam query port is required.
+## How it works
 
-## Maps
+- The server runs as the Docker container **`asa-server-1`** (compose file in
+  `/opt/asa-panel/docker/`). Game files, Steam and SteamCMD live in bind-mounts
+  under `/opt/asa-data` so the panel can read/write config, logs and version.
+- **`asa.service`** (systemd) runs `docker compose up` in the foreground, so the
+  panel's Start/Stop/Restart/Autostart work exactly as before — it just wraps
+  Docker now. The panel's map/mods/ports/session settings are compiled into
+  `ASA_START_PARAMS` on each start.
+- **RCON** is published on `127.0.0.1:27020`; the panel connects with the admin
+  password from `panel.json`.
+- **Update** pulls a newer image; the container updates the game files itself on
+  the next start.
 
-The official ASA maps are built in: The Island, The Center, Scorched Earth,
-Aberration, Extinction, Ragnarok and Astraeos — all as World-Partition maps with
-the `_WP` suffix, and all **free** (unlike ARK: SE there is no per-map DLC to
-own).
+## Maps & Mods
 
-For a mod map, enter the **map code** (e.g. `Svartalfheim_WP`) and the **mod ID**;
-the mod must also be listed under Mods so the server pulls it in.
-
-## Mods
-
-Mod handling on ARK: Survival Ascended is much simpler than on ARK: Survival
-Evolved. ASA mods live on **CurseForge**, and the server **downloads and installs
-them itself** when they are passed on the command line via `-mods=<id,id,...>`.
-There is no Steam Workshop, no `.z` extraction and no `ActiveMods=` line.
-
-Workflow: add the CurseForge mod ID under **Mods**, order the list (load order
-matters for dependent mods — map mods generally first), then **restart the
-server**. On the next start ASA fetches any new mods automatically. Removing a
-mod and restarting drops it.
-
-You can find a mod's numeric ID on its CurseForge page; the **CurseForge** link
-next to each entry opens `curseforge.com/projects/<id>`.
-
-## Auto-update
-
-Enable a daily systemd timer that pulls this repo and redeploys the panel (only the
-panel is restarted, not the game server; your accounts, maps, mods and config stay):
-
-```bash
-sudo bash scripts/setup-autoupdate.sh            # runs daily ~04:30
-sudo bash scripts/setup-autoupdate.sh --run-now  # and update immediately
-```
-
-Custom repo/time: `PANEL_REPO_URL=... UPDATE_TIME=03:15 sudo bash scripts/setup-autoupdate.sh`.
-Disable: `sudo systemctl disable --now asa-panel-update.timer`. The panel footer shows
-the running version.
+Same as before: official `_WP` maps are built in (free), custom/mod maps take a
+map code + mod ID. Mods are CurseForge IDs in load order — they go into
+`-mods=` in `ASA_START_PARAMS` and the image downloads them on (re)start.
 
 ## Ports (fixed & locked)
 
-The game, query and RCON ports are chosen at install time and then **locked** in the
-panel so they can't drift out of sync with your firewall forwarding:
+Game and RCON ports are chosen at install and **locked** in the panel
+(`GAME_PORT` / `RCON_PORT`), so they can't drift out of sync with the container's
+published ports. RCON is managed by the panel and always on.
+
+## Config editor
+
+The panel edits `GameUserSettings.ini` / `Game.ini` in the container's mounted
+config dir (`/opt/asa-data/server-files/ShooterGame/Saved/Config/WindowsServer/`).
+The data dir is world-writable inside this private container so the panel and the
+container can share those files.
+
+## Auto-update (panel)
 
 ```bash
-GAME_PORT=7777 QUERY_PORT=27015 RCON_PORT=27020 bash install.sh
+sudo bash scripts/setup-autoupdate.sh            # daily ~04:30
+sudo bash scripts/setup-autoupdate.sh --run-now
 ```
+Pulls this repo and redeploys the panel only (not the game container).
 
-They are written to `panel.json`, seeded into `GameUserSettings.ini`, and enforced by
-the panel: the launch form shows them read-only, the config editor locks `RCONPort`,
-and both structured and raw saves re-assert the fixed RCON port. Open **7777/UDP**
-(or your chosen game port) in the firewall.
-
-## Updating the panel
+## Updating the panel manually
 
 ```bash
 git pull
 sudo bash scripts/update.sh
 ```
 
-Users, maps, mods and config are left untouched.
-
-## Repairing RCON
-
-If RCON is unreachable:
-
-```bash
-sudo bash scripts/repair.sh
-```
-
-Sets `RCONEnabled=True`, the RCON port and, if missing, a `ServerAdminPassword`,
-restarts the server and waits for the port.
-
 ## Project layout
 
 ```
-install.sh            Full installer (run once in a fresh container)
-scripts/update.sh     Refresh panel code from the repo, restart the panel
-scripts/repair.sh     Ensure RCON is set up in GameUserSettings.ini
-scripts/setup-autoupdate.sh  Install the daily panel self-update timer
-src/                  Panel source (Flask app, RCON, i18n, templates, CSS)
-src/asa-launch.sh     Start wrapper (builds the start line, runs the .exe via Proton)
-src/asa-update.sh     SteamCMD update (Windows depots) + save backups
+install.sh                   Docker-based installer (run once in a fresh LXC)
+docker/docker-compose.yml    Compose definition for the ASA container
+src/asa-launch.sh            Builds ASA_START_PARAMS + asa.env, runs docker compose up
+src/asa-update.sh            docker compose pull
+scripts/update.sh            Refresh panel code, restart the panel
+scripts/setup-autoupdate.sh  Daily panel self-update timer
+src/                         Panel source (Flask app, RCON, i18n, templates, CSS)
 ```
-
-## Data storage (in the panel directory /opt/asa-panel)
-
-- `panel.json` – base config (paths, service names, secret key)
-- `users.json` – user accounts (hashed passwords)
-- `runtime.json` – launch parameters: map, mods, ports, public address, extra args
-- `maps.json` – custom/mod maps
-- `mods.json` – optional display names for mod IDs
 
 ## systemd services
 
-- `asa.service` – the game server (started via `asa-launch.sh` through Proton)
-- `asa-panel.service` – the web panel (waitress)
-- `asa-update.service` – SteamCMD update (oneshot)
-
-## How the Proton launch works
-
-`asa-launch.sh` reads `runtime.json`, pulls the `ServerAdminPassword` from the
-INI, then execs:
-
-```
-$PROTON_DIR/proton run ArkAscendedServer.exe \
-  <Map>_WP?listen?SessionName=…?Port=…?QueryPort=…?RCONEnabled=True?RCONPort=…?ServerAdminPassword=… \
-  -log -WinLiveMaxPlayers=<N> -mods=<ids> [-NoBattlEye] [extra args]
-```
-
-with `STEAM_COMPAT_DATA_PATH` (the prefix) and `STEAM_COMPAT_CLIENT_INSTALL_PATH`
-exported. Note the ASA-specific bits: **max players via `-WinLiveMaxPlayers=`**
-(not `?MaxPlayers=`) and **mods via `-mods=`**.
-
-## Security notes
-
-Passwords are hashed (Werkzeug) and all mutating actions are CSRF-protected. The
-panel serves plain HTTP — put it behind a reverse proxy with TLS for access beyond
-your LAN. `panel.json` and `users.json` hold sensitive data and are created with
-`600` (git-ignored).
+- `asa.service` — the ASA Docker container (via `docker compose up`)
+- `asa-panel.service` — the web panel (waitress)
+- `asa-update.service` — `docker compose pull` (oneshot)
 
 ## License
 

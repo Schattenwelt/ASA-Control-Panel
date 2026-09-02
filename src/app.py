@@ -232,7 +232,8 @@ app.jinja_env.globals["PANEL_VERSION"] = PANEL_VERSION
 def inject_me():
     return {"me": current_user(),
             "ports_locked": PORTS_LOCKED,
-            "fixed_ports": FIXED_PORTS}
+            "fixed_ports": FIXED_PORTS,
+            "rcon_port_fixed": effective_rcon_port()}
 
 
 @app.route("/lang/<code>")
@@ -252,6 +253,10 @@ def run(cmd, timeout=30):
         return p.returncode, (p.stdout + p.stderr).strip()
     except subprocess.TimeoutExpired:
         return 1, "Zeitüberschreitung beim Ausführen des Befehls."
+    except (FileNotFoundError, OSError) as e:
+        # z. B. 'sudo' oder 'journalctl' nicht vorhanden -> nicht crashen,
+        # sondern als Fehlschlag melden (Aufrufer haben Fallbacks)
+        return 1, str(e)
 
 
 def service_active(name):
@@ -284,9 +289,73 @@ def stop_service():
 
 
 def recent_logs(name, lines=60):
-    rc, out = run(["journalctl", "-u", name, "-n", str(lines),
-                   "--no-pager", "-o", "short-iso"])
-    return out if rc == 0 else "Keine Logs verfügbar (Rechte prüfen)."
+    """Journal einer Unit lesen. Das Panel läuft als unprivilegierter User, der das
+    System-Journal i. d. R. nicht sehen darf – daher zuerst über die schmale
+    sudo-Regel, dann als Fallback direkt (falls die systemd-journal-Gruppe reicht)."""
+    cmd = ["journalctl", "-u", name, "-n", str(lines), "--no-pager", "-o", "short-iso"]
+    rc, out = run(["sudo", "-n", *cmd])
+    if rc == 0 and out.strip() and "-- No entries --" not in out:
+        return out
+    rc2, out2 = run(cmd)
+    if rc2 == 0 and out2.strip() and "-- No entries --" not in out2:
+        return out2
+    return "Keine Logs verfügbar (Rechte prüfen)."
+
+
+def _tail_file(path, lines):
+    """Letzte n Zeilen einer (ggf. großen) Datei effizient lesen."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            data = b""
+            block = 8192
+            while size > 0 and data.count(b"\n") <= lines:
+                step = min(block, size)
+                size -= step
+                fh.seek(size)
+                data = fh.read(step) + data
+        text = data.decode("utf-8", "ignore")
+        return "\n".join(text.splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
+def game_log_tail(lines=60):
+    """Letzte Zeilen der ASA-eigenen Logdatei (überlebt Reboots; journald im LXC
+    ist oft flüchtig). Fällt auf das neueste Log-Backup zurück."""
+    logs_dir = os.path.join(ASA_DIR, "ShooterGame", "Saved", "Logs")
+    active = os.path.join(logs_dir, "ShooterGame.log")
+    if os.path.isfile(active):
+        tail = _tail_file(active, lines)
+        if tail.strip():
+            return tail
+    try:
+        backups = sorted(
+            (os.path.join(logs_dir, f) for f in os.listdir(logs_dir) if f.endswith(".log")),
+            key=os.path.getmtime, reverse=True)
+    except OSError:
+        backups = []
+    for path in backups:
+        tail = _tail_file(path, lines)
+        if tail.strip():
+            return tail
+    return ""
+
+
+def server_log(lines=60):
+    """Server-Log fürs Dashboard: bevorzugt das Unit-Journal (systemd/Proton-Wrapper –
+    zeigt auch Startfehler wie fehlende Libs), fällt aber auf die ASA-Logdatei zurück,
+    wenn journald leer ist (im LXC oft flüchtig)."""
+    j = recent_logs(SERVICE, lines)
+    bad = (not j.strip()) or ("-- No entries --" in j) or ("No journal files" in j) \
+        or ("Keine Logs verfügbar" in j)
+    if not bad:
+        return j
+    g = game_log_tail(lines)
+    if g.strip():
+        return g
+    return j.strip() or "Keine Logs verfügbar."
 
 
 # ---------------------------------------------------------------------------
@@ -357,8 +426,17 @@ def read_ini(key):
 def write_ini(key, text):
     path = INI_FILES[key]
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    # Über Temp-Datei + os.replace schreiben: so kann das Panel die Datei auch
+    # ersetzen, wenn sie dem Container-User gehört (nur Verzeichnis-Schreibrecht
+    # nötig). 0666, damit der Container sie weiter beschreiben kann.
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(text)
+    try:
+        os.chmod(tmp, 0o666)
+    except OSError:
+        pass
+    os.replace(tmp, path)
 
 
 def ini_get(path, section, key):
@@ -423,7 +501,9 @@ def ini_set(path, section, key, value):
 def rcon_config():
     rt = load_runtime()
     port = str(rt.get("rcon_port") or "27020")
-    password = ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or ""
+    # Docker: RCON-Passwort steht in panel.json (wird in ASA_START_PARAMS gesetzt);
+    # Proton/alt: aus der GameUserSettings.ini.
+    password = CONF.get("rcon_password") or ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or ""
     enabled = bool(password)
     return enabled, port, password
 
@@ -731,7 +811,7 @@ def dashboard():
         update_state=service_active(UPDATE_SERVICE),
         enabled=service_enabled(SERVICE),
         rcon_enabled=rcon_config()[0],
-        logs=recent_logs(SERVICE),
+        logs=server_log(),
         active_map=map_name_for(rt["map"]),
         mods_count=len(rt["mods"]),
         service=SERVICE,
@@ -753,7 +833,7 @@ def status():
         update=service_active(UPDATE_SERVICE),
         enabled=service_enabled(SERVICE),
         stats=system_stats(),
-        logs=recent_logs(SERVICE, 60),
+        logs=server_log(60),
     )
 
 
@@ -1021,11 +1101,14 @@ def config_save():
             field = "field_" + e["id"]
             if field in request.form:
                 edits[e["id"]] = request.form.get(field, "")
-    write_ini(key, apply_ini(entries, edits))
-    enforce_locked_ports(key)
+    try:
+        write_ini(key, apply_ini(entries, edits))
+        enforce_rcon(key)
+    except OSError as e:
+        flash(t("config_write_error", err=str(e)))
+        return redirect(url_for("config", file=key))
     flash(t("config_saved"))
     return redirect(url_for("config", file=key))
-
 
 @app.route("/config/save-raw", methods=["POST"])
 @login_required
@@ -1034,19 +1117,29 @@ def config_save_raw():
         flash(t("csrf_invalid"))
         return redirect(url_for("config"))
     key = _current_file_key()
-    write_ini(key, request.form.get("raw", ""))
-    enforce_locked_ports(key)
+    try:
+        write_ini(key, request.form.get("raw", ""))
+        enforce_rcon(key)
+    except OSError as e:
+        flash(t("config_write_error", err=str(e)))
+        return redirect(url_for("config", file=key))
     flash(t("raw_saved"))
     return redirect(url_for("config", file=key))
 
 
-def enforce_locked_ports(key):
-    """Bei gesperrten Ports den festen RCON-Port/-Status in der GUS erzwingen –
-    auch wenn er im Editor (strukturiert oder roh) verändert wurde."""
-    if not PORTS_LOCKED or key != "gus":
+def effective_rcon_port():
+    """Effektiver RCON-Port: fester Port aus panel.json, sonst der aus runtime.json."""
+    return FIXED_PORTS["rcon_port"] if PORTS_LOCKED else load_runtime()["rcon_port"]
+
+
+def enforce_rcon(key):
+    """RCON ist fürs Panel Pflicht: RCONEnabled immer True, RCONPort auf den
+    effektiven Port festnageln. Im Docker-Modus wird RCON über ASA_START_PARAMS
+    gesetzt (panel.json rcon_password), daher hier nichts erzwingen."""
+    if key != "gus" or CONF.get("rcon_password"):
         return
     ini_set(GUS_PATH, "ServerSettings", "RCONEnabled", "True")
-    ini_set(GUS_PATH, "ServerSettings", "RCONPort", str(FIXED_PORTS["rcon_port"]))
+    ini_set(GUS_PATH, "ServerSettings", "RCONPort", str(effective_rcon_port()))
 
 
 # ---------------------------------------------------------------------------
@@ -1065,7 +1158,13 @@ def players():
         with rcon_connect() as r:
             return jsonify(enabled=True, reachable=True, players=r.players())
     except (RCONError, OSError) as e:
-        return jsonify(enabled=True, reachable=False, players=[], note=str(e))
+        # Server-Prozess läuft, aber RCON nimmt noch keine Verbindung an – das ist
+        # beim Hochfahren/Weltladen normal (Port noch zu). Freundlicher Hinweis statt
+        # rohem "[Errno 111] Connection refused".
+        refused = isinstance(e, ConnectionRefusedError) or "refused" in str(e).lower() \
+            or "reset" in str(e).lower() or "timed out" in str(e).lower()
+        note = t("rcon_starting") if refused else str(e)
+        return jsonify(enabled=True, reachable=False, players=[], note=note)
 
 
 @app.route("/rcon", methods=["POST"])

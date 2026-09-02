@@ -1,0 +1,20 @@
+# Wird vom Installer nach /opt/asa-panel/docker/ kopiert.
+# Alle Werte kommen aus asa.env (vom Panel/asa-launch.sh bei jedem Start erzeugt).
+services:
+  asa-server-1:
+    container_name: asa-server-1
+    image: ${ASA_IMAGE:-ghcr.io/justamply/asa-linux-server:latest}
+    restart: "no"                 # Autostart steuert systemd (asa.service), nicht Docker
+    stop_grace_period: 120s       # Zeit für sauberes Herunterfahren (saveworld)
+    environment:
+      ASA_START_PARAMS: "${ASA_START_PARAMS}"
+      ENABLE_DEBUG: "0"
+      TZ: "${TZ:-Europe/Berlin}"
+    ports:
+      - "${GAME_PORT:-7777}:${GAME_PORT:-7777}/udp"
+      - "${RCON_PORT:-27020}:${RCON_PORT:-27020}/tcp"
+    volumes:
+      # Bind-Mounts auf den Host, damit das Panel Config/Logs/Version lesen & schreiben kann
+      - "${DATA_DIR}/server-files:/home/gameserver/server-files:rw"
+      - "${DATA_DIR}/steam:/home/gameserver/Steam:rw"
+      - "${DATA_DIR}/steamcmd:/home/gameserver/steamcmd:rw"
