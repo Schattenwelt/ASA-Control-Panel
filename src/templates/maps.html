@@ -84,20 +84,7 @@
         <span class="fname">{{ t('launch_maxplayers') }}</span>
         <input name="max_players" value="{{ rt.max_players }}" inputmode="numeric">
       </label>
-      {% if ports_locked %}
-      <label class="field">
-        <span class="fname">{{ t('launch_port') }}</span>
-        <input value="{{ rt.port }}" inputmode="numeric" disabled>
-      </label>
-      <label class="field">
-        <span class="fname">{{ t('launch_query') }}</span>
-        <input value="{{ rt.query_port }}" inputmode="numeric" disabled>
-      </label>
-      <label class="field">
-        <span class="fname">{{ t('launch_rconport') }}</span>
-        <input value="{{ rt.rcon_port }}" inputmode="numeric" disabled>
-      </label>
-      {% else %}
+      {% if not ports_locked %}
       <label class="field">
         <span class="fname">{{ t('launch_port') }}</span>
         <input name="port" value="{{ rt.port }}" inputmode="numeric">
