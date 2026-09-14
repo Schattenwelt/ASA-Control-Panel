@@ -102,12 +102,19 @@ cp "$REPO_DIR/docker/docker-compose.yml" "$DOCKER_DIR/docker-compose.yml"
 # RCON-/Admin-Passwort erzeugen
 RCON_PW="$(python3 -c 'import secrets;print(secrets.token_urlsafe(12))')"
 
-# Grund-Config (Rates etc. + SessionName) vorab anlegen – asa-eigen, 0666
+# Grund-Config (Schwierigkeit, Raten + SessionName) vorab anlegen – asa-eigen, 0666
 GUS="$DATA_DIR/server-files/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini"
 if [ ! -f "$GUS" ]; then
     cat > "$GUS" <<EOF
 [ServerSettings]
 allowThirdPersonPlayer=True
+; Schwierigkeit / Level wilder Dinos: 5.0 = bis Lvl 150 (offiziell), höher = höhere Level
+DifficultyOffset=1.0
+OverrideOfficialDifficulty=5.0
+; Raten (1.0 = offiziell/normal)
+XPMultiplier=1.0
+TamingSpeedMultiplier=1.0
+HarvestAmountMultiplier=1.0
 
 [SessionSettings]
 SessionName=ASA Server
@@ -116,6 +123,40 @@ SessionName=ASA Server
 MaxPlayers=70
 EOF
     chmod 0666 "$GUS"
+fi
+
+# Game.ini als editierbare Vorlage anlegen (Balancing: Zucht, Stats, XP-Kurve).
+# Die aktiven Keys stehen auf offiziellen Werten (1.0) – ändern nichts, machen sie
+# aber im Config-Editor sichtbar/einstellbar. Beispiele sind auskommentiert.
+GAMEINI="$DATA_DIR/server-files/ShooterGame/Saved/Config/WindowsServer/Game.ini"
+if [ ! -f "$GAMEINI" ]; then
+    cat > "$GAMEINI" <<'EOF'
+[/script/shootergame.shootergamemode]
+; --- Zucht / Breeding (1.0 = normal; kleiner = schneller reifen/schlüpfen) ---
+MatingIntervalMultiplier=1.0
+EggHatchSpeedMultiplier=1.0
+BabyMatureSpeedMultiplier=1.0
+BabyCuddleIntervalMultiplier=1.0
+BabyImprintAmountMultiplier=1.0
+BabyFoodConsumptionSpeedMultiplier=1.0
+
+; --- Engrammpunkte pro Level (Beispiel; je Levelzeile ein Eintrag) ---
+; OverridePlayerLevelEngramPoints=8
+; OverridePlayerLevelEngramPoints=12
+
+; --- Per-Level-Stat-Multiplikatoren (Beispiele; Index = Stat) ---
+; PerLevelStatsMultiplier_Player[0]=1.0   ; Health
+; PerLevelStatsMultiplier_Player[7]=1.0   ; Weight
+; PerLevelStatsMultiplier_Player[8]=1.0   ; Melee
+; PerLevelStatsMultiplier_DinoTamed[0]=1.0
+; PerLevelStatsMultiplier_DinoWild[0]=1.0
+
+; --- Spieler-Max-Level: über die XP-Kurve (nicht über Difficulty!) ---
+; Difficulty regelt NUR die Level wilder Dinos. Das Spieler-Max-Level bestimmt
+; die Anzahl der LevelExperienceRampOverrides-Einträge. Beispiel (stark gekürzt):
+; LevelExperienceRampOverrides=(ExperiencePointsForLevel[0]=10,ExperiencePointsForLevel[1]=20,...)
+EOF
+    chmod 0666 "$GAMEINI"
 fi
 
 # ------------------------- Panel-Dateien ------------------------------------
