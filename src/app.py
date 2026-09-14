@@ -51,7 +51,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.1.0"
+PANEL_VERSION = "1.2.0"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
