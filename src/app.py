@@ -51,7 +51,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.2.2"
+PANEL_VERSION = "1.2.4"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -501,9 +501,12 @@ def ini_set(path, section, key, value):
 def rcon_config():
     rt = load_runtime()
     port = str(rt.get("rcon_port") or "27020")
-    # Docker: RCON-Passwort steht in panel.json (wird in ASA_START_PARAMS gesetzt);
-    # Proton/alt: aus der GameUserSettings.ini.
-    password = CONF.get("rcon_password") or ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or ""
+    # ServerAdminPassword ist die einzige Quelle: zuerst aus der GameUserSettings.ini
+    # (dort ändert es der Eigentümer im Config-Editor), sonst der Seed-Wert aus panel.json.
+    # Alles ab dem ersten '?' abschneiden – ein '?' ist nie Teil eines Passworts,
+    # sondern trennt Startparameter (heilt ein evtl. verklebtes "pw?ServerPassword=..").
+    raw_pw = ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or CONF.get("rcon_password") or ""
+    password = raw_pw.split("?", 1)[0].strip()
     enabled = bool(password)
     return enabled, port, password
 

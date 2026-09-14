@@ -108,6 +108,8 @@ if [ ! -f "$GUS" ]; then
     cat > "$GUS" <<EOF
 [ServerSettings]
 allowThirdPersonPlayer=True
+; RCON-/Admin-Passwort (hier änderbar; wird beim Serverstart übernommen)
+ServerAdminPassword=$RCON_PW
 ; Schwierigkeit / Level wilder Dinos: 5.0 = bis Lvl 150 (offiziell), höher = höhere Level
 DifficultyOffset=1.0
 OverrideOfficialDifficulty=5.0
