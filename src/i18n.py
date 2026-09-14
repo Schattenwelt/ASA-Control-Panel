@@ -153,6 +153,10 @@ TRANSLATIONS = {
         "de": "Ports sind beim Installieren festgelegt und hier gesperrt – Spiel-Port {game}/UDP, RCON-Port {rcon} (nur intern).",
         "en": "Ports are set at install time and locked here – game port {game}/UDP, RCON port {rcon} (internal only).",
     },
+    "cfg_sessionname_note": {
+        "de": "Der Servername (SessionName) wird unter „Startparameter“ gesetzt und hier nicht angezeigt.",
+        "en": "The server name (SessionName) is set under “Launch parameters” and hidden here.",
+    },
     "cfg_rcon_managed": {
         "de": "RCON wird vom Panel verwaltet und ist immer aktiv (RCONEnabled/RCONPort werden hier nicht angezeigt).",
         "en": "RCON is managed by the panel and always on (RCONEnabled/RCONPort are hidden here).",

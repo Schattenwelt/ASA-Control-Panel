@@ -16,7 +16,7 @@
 
 {% if file_key == 'gus' %}
 <div class="notice">
-  {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }}{% else %}{{ t('cfg_rcon_managed') }}{% endif %}
+  {% if ports_locked %}{{ t('ports_locked_note', game=fixed_ports.game_port, query=fixed_ports.query_port, rcon=fixed_ports.rcon_port) }}{% else %}{{ t('cfg_rcon_managed') }}{% endif %} {{ t('cfg_sessionname_note') }}
 </div>
 {% endif %}
 
@@ -38,7 +38,7 @@
           {% if g.name %}<h3 class="subhead mono">[{{ g.name }}]</h3>{% endif %}
           <div class="grid">
             {% for f in g.fields %}
-            {% if f.key in ('RCONPort', 'RCONEnabled') %}
+            {% if f.key in ('RCONPort', 'RCONEnabled', 'SessionName') %}
             {# vom Panel verwaltet – wird ausgeblendet (siehe Hinweis oben) #}
             {% else %}
             <label class="field">
