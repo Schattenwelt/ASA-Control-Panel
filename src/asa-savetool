@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+asa-savetool – privilegierter Helfer für die Speicherstand-Verwaltung des Panels.
+
+Die Save-Ordner gehören dem Container-User (z. B. 25000), nicht dem Panel-User (asa),
+daher laufen die schreibenden Aktionen über dieses Skript per sudo als root.
+Es liegt root-eigen unter /usr/local/bin (nicht vom Panel-User beschreibbar) und
+validiert alle Eingaben streng (kein Pfad-Ausbruch, feste Namensmuster).
+
+Aufrufe (nur diese):
+  asa-savetool restore <map> <backup-datei>
+  asa-savetool fresh   <map>
+  asa-savetool backup  <map>
+"""
+import json
+import os
+import re
+import shutil
+import sys
+import time
+
+PANEL_JSON = os.environ.get("PANEL_CONFIG", "/opt/asa-panel/panel.json")
+MAP_RE = re.compile(r"^[A-Za-z0-9_]{1,64}$")
+# erlaubte Backup-Dateien: <map>_....ark (Zeitstempel oder _manual_), KEINE .arkrbf/.bak
+BACKUP_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}\.ark$")
+
+
+def die(msg):
+    print("FEHLER: %s" % msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def saves_base():
+    try:
+        conf = json.load(open(PANEL_JSON))
+    except OSError as e:
+        die("panel.json nicht lesbar: %s" % e)
+    asa_dir = conf.get("asa_dir")
+    if not asa_dir:
+        die("asa_dir fehlt in panel.json")
+    return os.path.join(asa_dir, "ShooterGame", "Saved", "SavedArks")
+
+
+def map_dir(base, m):
+    if not MAP_RE.match(m):
+        die("ungültiger Kartenname")
+    d = os.path.realpath(os.path.join(base, m))
+    if os.path.dirname(d) != os.path.realpath(base):
+        die("Pfad-Ausbruch erkannt")
+    if not os.path.isdir(d):
+        die("Kartenordner nicht gefunden: %s" % m)
+    return d
+
+
+def owner_of(path):
+    st = os.stat(path)
+    return st.st_uid, st.st_gid
+
+
+def chown_like(path, uid, gid, mode=0o664):
+    try:
+        os.chown(path, uid, gid)
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+
+def op_backup(base, m):
+    d = map_dir(base, m)
+    active = os.path.join(d, m + ".ark")
+    if not os.path.isfile(active):
+        die("keine aktive Save vorhanden (%s.ark)" % m)
+    uid, gid = owner_of(d)
+    ts = time.strftime("%d.%m.%Y_%H.%M.%S")
+    dst = os.path.join(d, "%s_manual_%s.ark" % (m, ts))
+    shutil.copy2(active, dst)
+    chown_like(dst, uid, gid)
+    print("Backup erstellt: %s" % os.path.basename(dst))
+
+
+def op_restore(base, m, backup):
+    d = map_dir(base, m)
+    if not BACKUP_RE.match(backup) or "/" in backup or ".." in backup:
+        die("ungültiger Backup-Dateiname")
+    src = os.path.realpath(os.path.join(d, backup))
+    if os.path.dirname(src) != d or not os.path.isfile(src):
+        die("Backup nicht gefunden: %s" % backup)
+    uid, gid = owner_of(d)
+    active = os.path.join(d, m + ".ark")
+    ts = int(time.time())
+    if os.path.isfile(active):
+        os.replace(active, active + ".corrupt-%d" % ts)   # kaputte Save aufheben
+    shutil.copy2(src, active)
+    chown_like(active, uid, gid)
+    print("Wiederhergestellt: %s -> %s.ark" % (backup, m))
+
+
+def op_fresh(base, m):
+    d = map_dir(base, m)
+    ts = int(time.time())
+    dst = os.path.join(base, "%s_alt_%d" % (m, ts))
+    os.rename(d, dst)   # ganzen Kartenordner wegräumen -> frische Welt beim Start
+    print("Welt zurückgesetzt. Alter Stand: %s" % os.path.basename(dst))
+
+
+def main():
+    if len(sys.argv) < 3:
+        die("zu wenige Argumente")
+    op, m = sys.argv[1], sys.argv[2]
+    base = saves_base()
+    if not os.path.isdir(base):
+        die("SavedArks-Verzeichnis nicht gefunden")
+    if op == "backup":
+        op_backup(base, m)
+    elif op == "restore":
+        if len(sys.argv) < 4:
+            die("Backup-Datei fehlt")
+        op_restore(base, m, sys.argv[3])
+    elif op == "fresh":
+        op_fresh(base, m)
+    else:
+        die("unbekannte Aktion")
+
+
+if __name__ == "__main__":
+    main()

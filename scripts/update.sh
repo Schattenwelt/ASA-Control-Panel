@@ -10,6 +10,14 @@ cp -r "$REPO_DIR/src/app.py" "$REPO_DIR/src/rcon.py" "$REPO_DIR/src/i18n.py" \
       "$REPO_DIR/src/templates" "$REPO_DIR/src/static" "$PANEL_DIR/"
 install -m 0755 "$REPO_DIR/src/asa-launch.sh" /home/asa/asa-launch.sh
 install -m 0755 "$REPO_DIR/src/asa-update.sh" /home/asa/asa-update.sh
+# Speicherstand-Helfer (root-eigen) mit-aktualisieren
+install -m 0755 -o root -g root "$REPO_DIR/src/asa-savetool" /usr/local/bin/asa-savetool
+# sudoers-Zeile für den Helfer ergänzen, falls sie noch fehlt (Bestandsinstallation)
+SUDO_FILE=/etc/sudoers.d/asa-panel
+if [ -f "$SUDO_FILE" ] && ! grep -q "asa-savetool" "$SUDO_FILE"; then
+    sed -i '/^asa ALL=/ s#$#, /usr/local/bin/asa-savetool *#' "$SUDO_FILE"
+    visudo -cf "$SUDO_FILE" >/dev/null && echo "sudoers: asa-savetool ergänzt" || echo "WARN: sudoers-Prüfung fehlgeschlagen"
+fi
 
 # Bestehende panel.json um neue Schlüssel ergänzen (appid + feste Ports), ohne
 # vorhandene Werte zu überschreiben. So wird die Port-/RCON-Sperre auch bei einer

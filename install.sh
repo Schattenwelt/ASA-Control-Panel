@@ -168,6 +168,8 @@ cp -r "$REPO_DIR/src/app.py" "$REPO_DIR/src/rcon.py" "$REPO_DIR/src/i18n.py" \
 install -m 0755 "$REPO_DIR/src/asa-launch.sh" "$ASA_HOME/asa-launch.sh"
 install -m 0755 "$REPO_DIR/src/asa-update.sh" "$ASA_HOME/asa-update.sh"
 chown "$ASA_USER":"$ASA_USER" "$ASA_HOME/asa-launch.sh" "$ASA_HOME/asa-update.sh"
+# Speicherstand-Helfer root-eigen nach /usr/local/bin (asa darf ihn NICHT ändern)
+install -m 0755 -o root -g root "$REPO_DIR/src/asa-savetool" /usr/local/bin/asa-savetool
 
 # ------------------------- systemd-Units ------------------------------------
 msg "Erstelle systemd-Services ..."
@@ -289,7 +291,7 @@ chmod 600 "$PANEL_DIR/panel.json" "$PANEL_DIR/users.json"
 msg "Setze eingeschränkte sudo-Rechte fürs Panel ..."
 SUDO_FILE=/etc/sudoers.d/asa-panel
 cat > "$SUDO_FILE" <<'SUDO'
-asa ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now asa.service, /usr/bin/systemctl disable --now asa.service, /usr/bin/systemctl enable asa.service, /usr/bin/systemctl disable asa.service, /usr/bin/systemctl restart asa.service, /usr/bin/systemctl reset-failed asa.service, /usr/bin/systemctl start asa-update.service, /usr/bin/journalctl -u asa.service *, /usr/bin/journalctl -u asa-update.service *
+asa ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now asa.service, /usr/bin/systemctl disable --now asa.service, /usr/bin/systemctl enable asa.service, /usr/bin/systemctl disable asa.service, /usr/bin/systemctl restart asa.service, /usr/bin/systemctl reset-failed asa.service, /usr/bin/systemctl start asa-update.service, /usr/bin/journalctl -u asa.service *, /usr/bin/journalctl -u asa-update.service *, /usr/local/bin/asa-savetool *
 SUDO
 chmod 440 "$SUDO_FILE"
 visudo -cf "$SUDO_FILE" >/dev/null || die "sudoers-Regel ungültig."
