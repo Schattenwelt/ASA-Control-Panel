@@ -85,10 +85,68 @@ except OSError: pass
 os.replace(tmp, gus)
 PY
 
-# ASA_START_PARAMS zusammenbauen (nur Tokens ohne Leerzeichen INNERHALB eines Wertes)
+# ServerAdminPassword bereinigen + ServerPassword als eigene INI-Zeile schreiben.
+# Grund: steht ?ServerPassword= direkt hinter ?ServerAdminPassword= in der
+# Kommandozeile, klebt der Container beim Zurückschreiben beides in EIN INI-Feld
+# ("pw?ServerPassword=xyz"). Deshalb: ServerPassword NICHT in die Startparameter,
+# sondern in [ServerSettings]; und ein evtl. schon verkorkstes Admin-Passwort
+# (alles ab dem ersten '?') hier heilen.
+python3 - "$GUS" "$SRVPW" <<'PY' || true
+import sys, os
+gus, srvpw = sys.argv[1], sys.argv[2]
+lines = []
+if os.path.exists(gus):
+    raw = open(gus, "rb").read()
+    enc = "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig" if raw[:3]==b"\xef\xbb\xbf" else "utf-8")
+    lines = raw.decode(enc, "ignore").replace("\r","").split("\n")
+def clean(v): return v.split("?", 1)[0].strip()
+out, in_ss, seen_ss, done_sp = [], False, False, False
+for ln in lines:
+    s = ln.strip()
+    if s.startswith("[") and s.endswith("]"):
+        if in_ss and not done_sp:
+            out.append("ServerPassword=%s" % srvpw); done_sp = True
+        in_ss = (s == "[ServerSettings]"); seen_ss = seen_ss or in_ss
+        out.append(ln); continue
+    if in_ss and s.lower().startswith("serveradminpassword="):
+        out.append("ServerAdminPassword=%s" % clean(s.split("=", 1)[1])); continue
+    if in_ss and s.lower().startswith("serverpassword="):
+        out.append("ServerPassword=%s" % srvpw); done_sp = True; continue
+    out.append(ln)
+if in_ss and not done_sp:
+    out.append("ServerPassword=%s" % srvpw); done_sp = True
+if not seen_ss:
+    if out and out[-1].strip() != "": out.append("")
+    out += ["[ServerSettings]", "ServerPassword=%s" % srvpw]
+text = "\n".join(out)
+if not text.endswith("\n"): text += "\n"
+tmp = gus + ".tmp"; open(tmp, "w", encoding="utf-8").write(text)
+try: os.chmod(tmp, 0o666)
+except OSError: pass
+os.replace(tmp, gus)
+PY
+
+# ServerAdminPassword aus der INI lesen (dort ändert es der Eigentümer im
+# Config-Editor). Nur wenn dort keins steht, den Seed-Wert aus panel.json nehmen.
+INI_PW="$(python3 - "$GUS" <<'PY' || true
+import sys, os
+gus = sys.argv[1]
+if os.path.exists(gus):
+    raw = open(gus, "rb").read()
+    enc = "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig" if raw[:3]==b"\xef\xbb\xbf" else "utf-8")
+    for ln in raw.decode(enc, "ignore").splitlines():
+        s = ln.strip()
+        if s.lower().startswith("serveradminpassword="):
+            print(s.split("=", 1)[1].split("?", 1)[0].strip()); break
+PY
+)"
+[ -n "$INI_PW" ] && RCON_PW="$INI_PW"
+
+# ASA_START_PARAMS zusammenbauen (nur Tokens ohne Leerzeichen INNERHALB eines Wertes).
+# ServerPassword steht in der INI (siehe oben), NICHT hier – sonst klebt es ans
+# Admin-Passwort. ServerAdminPassword als letztes ?-Token vor den -Flags.
 OPTS="${MAP}?listen?Port=${GAME_PORT}?QueryPort=${QUERY_PORT}?RCONPort=${RCON_PORT}?RCONEnabled=True"
 [ -n "$RCON_PW" ] && OPTS="${OPTS}?ServerAdminPassword=${RCON_PW}"
-[ -n "$SRVPW" ] && OPTS="${OPTS}?ServerPassword=${SRVPW}"
 PARAMS="${OPTS} -WinLiveMaxPlayers=${MAXP}"
 [ -n "$MODS" ] && PARAMS="${PARAMS} -mods=${MODS}"
 [ -z "$BATTLEYE" ] && PARAMS="${PARAMS} -NoBattlEye"

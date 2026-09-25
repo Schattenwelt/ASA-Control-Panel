@@ -9,6 +9,37 @@ TRANSLATIONS = {
     "nav_overview": {"de": "Übersicht", "en": "Overview"},
     "nav_maps": {"de": "Karten", "en": "Maps"},
     "nav_mods": {"de": "Mods", "en": "Mods"},
+    "nav_saves": {"de": "Speicherstand", "en": "Saves"},
+    "saves_title": {"de": "Speicherstand-Verwaltung", "en": "Save management"},
+    "saves_intro": {
+        "de": "Backups wiederherstellen, ein manuelles Backup anlegen oder die Welt frisch starten. "
+              "Aktionen nur bei gestopptem Server – sonst überschreibt der laufende Server die Dateien gleich wieder. "
+              "Alte/kaputte Stände werden nie gelöscht, sondern beiseitegelegt (.corrupt / _alt_).",
+        "en": "Restore a backup, make a manual backup, or start a fresh world. Only while the server is stopped – "
+              "otherwise the running server overwrites the files again. Old/corrupt saves are never deleted, "
+              "just set aside (.corrupt / _alt_).",
+    },
+    "saves_none": {"de": "Noch keine Speicherstände gefunden (Server einmal starten).",
+                   "en": "No saves found yet (start the server once)."},
+    "saves_active": {"de": "Aktive Save", "en": "Active save"},
+    "saves_no_active": {"de": "Keine aktive Save vorhanden.", "en": "No active save present."},
+    "saves_no_backups": {"de": "Keine Backups vorhanden", "en": "No backups available"},
+    "saves_count": {"de": "{n} Backup(s) vorhanden.", "en": "{n} backup(s) available."},
+    "saves_restore": {"de": "Backup wiederherstellen", "en": "Restore backup"},
+    "saves_backup_now": {"de": "Backup jetzt", "en": "Backup now"},
+    "saves_fresh": {"de": "Welt neu starten", "en": "Fresh world"},
+    "saves_stop_first": {"de": "Bitte zuerst den Server stoppen – dann sind die Aktionen verfügbar.",
+                         "en": "Please stop the server first – then the actions become available."},
+    "saves_pick_backup": {"de": "Kein Backup ausgewählt.", "en": "No backup selected."},
+    "saves_confirm_restore": {"de": "Ausgewähltes Backup als aktive Save einsetzen? Die aktuelle Save wird als .corrupt beiseitegelegt.",
+                              "en": "Set the selected backup as the active save? The current save is set aside as .corrupt."},
+    "saves_confirm_fresh": {"de": "Welt {map} wirklich zurücksetzen? Der aktuelle Stand wird als _alt_ weggeräumt und der Server startet mit einer FRISCHEN Welt.",
+                            "en": "Really reset world {map}? The current state is moved aside as _alt_ and the server starts a FRESH world."},
+    "saves_restored": {"de": "Backup wiederhergestellt: {name}. Server starten.", "en": "Backup restored: {name}. Start the server."},
+    "saves_backup_done": {"de": "Backup erstellt.", "en": "Backup created."},
+    "saves_fresh_done": {"de": "Welt zurückgesetzt – der Server startet mit einer frischen Welt.",
+                         "en": "World reset – the server will start a fresh world."},
+    "saves_error": {"de": "Aktion fehlgeschlagen: {err}", "en": "Action failed: {err}"},
     "nav_config": {"de": "Konfiguration", "en": "Configuration"},
     "nav_users": {"de": "Benutzer", "en": "Users"},
     "nav_account": {"de": "Konto", "en": "Account"},
@@ -152,6 +183,10 @@ TRANSLATIONS = {
     "ports_locked_note": {
         "de": "Ports sind beim Installieren festgelegt und hier gesperrt – Spiel-Port {game}/UDP, RCON-Port {rcon} (nur intern).",
         "en": "Ports are set at install time and locked here – game port {game}/UDP, RCON port {rcon} (internal only).",
+    },
+    "cfg_sessionname_note": {
+        "de": "Der Servername (SessionName) wird unter „Startparameter“ gesetzt und hier nicht angezeigt.",
+        "en": "The server name (SessionName) is set under “Launch parameters” and hidden here.",
     },
     "cfg_rcon_managed": {
         "de": "RCON wird vom Panel verwaltet und ist immer aktiv (RCONEnabled/RCONPort werden hier nicht angezeigt).",

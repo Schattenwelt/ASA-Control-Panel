@@ -498,3 +498,8 @@ input:focus, textarea:focus {
 .update-badge.ok    { color: var(--ok);   background: rgba(53,213,154,.12); }
 .update-badge.avail { color: var(--accent-ink); background: #e0912f; }
 .update-badge.warn  { color: var(--warn); background: rgba(242,181,58,.12); }
+
+/* --- Speicherstand-Verwaltung --- */
+.save-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-top: 6px; }
+.save-row { display: flex; gap: 8px; align-items: center; }
+.save-row select { min-width: 220px; }

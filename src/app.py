@@ -51,7 +51,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.2.0"
+PANEL_VERSION = "1.2.6"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -501,9 +501,12 @@ def ini_set(path, section, key, value):
 def rcon_config():
     rt = load_runtime()
     port = str(rt.get("rcon_port") or "27020")
-    # Docker: RCON-Passwort steht in panel.json (wird in ASA_START_PARAMS gesetzt);
-    # Proton/alt: aus der GameUserSettings.ini.
-    password = CONF.get("rcon_password") or ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or ""
+    # ServerAdminPassword ist die einzige Quelle: zuerst aus der GameUserSettings.ini
+    # (dort ändert es der Eigentümer im Config-Editor), sonst der Seed-Wert aus panel.json.
+    # Alles ab dem ersten '?' abschneiden – ein '?' ist nie Teil eines Passworts,
+    # sondern trennt Startparameter (heilt ein evtl. verklebtes "pw?ServerPassword=..").
+    raw_pw = ini_get(GUS_PATH, "ServerSettings", "ServerAdminPassword") or CONF.get("rcon_password") or ""
+    password = raw_pw.split("?", 1)[0].strip()
     enabled = bool(password)
     return enabled, port, password
 
@@ -993,7 +996,111 @@ def maps_launch():
 
 
 # ---------------------------------------------------------------------------
-# Routen: Mods (CurseForge – der Server lädt sie beim Start selbst via -mods=)
+# Routen: Speicherstände (Save/Backup-Verwaltung – über sudo-Helfer, da die
+# Save-Ordner dem Container-User gehören)
+# ---------------------------------------------------------------------------
+SAVETOOL = "/usr/local/bin/asa-savetool"
+_SAVE_MAP_RE = re.compile(r"^[A-Za-z0-9_]{1,64}$")
+
+
+def saves_base():
+    return os.path.join(ASA_DIR, "ShooterGame", "Saved", "SavedArks")
+
+
+def list_saves():
+    """Pro Karte: aktive Save + brauchbare Backups (.ark, ohne .arkrbf/.bak/.corrupt)."""
+    base = saves_base()
+    out = []
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return out
+    active_map = load_runtime().get("map")
+    for m in names:
+        d = os.path.join(base, m)
+        if not os.path.isdir(d) or not _SAVE_MAP_RE.match(m):
+            continue
+        active = None
+        ap = os.path.join(d, m + ".ark")
+        if os.path.isfile(ap):
+            st = os.stat(ap)
+            active = {"size": round(st.st_size / 1048576, 1),
+                      "when": time.strftime("%d.%m.%Y %H:%M", time.localtime(st.st_mtime))}
+        backups = []
+        try:
+            for f in os.listdir(d):
+                if f == m + ".ark" or not f.endswith(".ark") or ".corrupt" in f:
+                    continue
+                st = os.stat(os.path.join(d, f))
+                backups.append({"name": f, "size": round(st.st_size / 1048576, 1),
+                                "ts": st.st_mtime,
+                                "when": time.strftime("%d.%m.%Y %H:%M", time.localtime(st.st_mtime))})
+        except OSError:
+            pass
+        backups.sort(key=lambda b: b["ts"], reverse=True)
+        out.append({"map": m, "active": active, "backups": backups,
+                    "is_current": (m == active_map)})
+    return out
+
+
+def _savetool(*args):
+    return run(["sudo", "-n", SAVETOOL, *args], timeout=120)
+
+
+@app.route("/saves")
+@login_required
+def saves_page():
+    return render_template("saves.html", saves=list_saves(),
+                           running=(service_active(SERVICE) == "active"))
+
+
+@app.route("/saves/backup", methods=["POST"])
+@login_required
+def saves_backup():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("saves_page"))
+    if service_active(SERVICE) == "active":
+        flash(t("saves_stop_first"))
+        return redirect(url_for("saves_page"))
+    m = request.form.get("map", "")
+    rc, out = _savetool("backup", m)
+    flash(t("saves_backup_done") if rc == 0 else t("saves_error", err=out))
+    return redirect(url_for("saves_page"))
+
+
+@app.route("/saves/restore", methods=["POST"])
+@login_required
+def saves_restore():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("saves_page"))
+    if service_active(SERVICE) == "active":
+        flash(t("saves_stop_first"))
+        return redirect(url_for("saves_page"))
+    m = request.form.get("map", "")
+    backup = request.form.get("backup", "")
+    if not backup:
+        flash(t("saves_pick_backup"))
+        return redirect(url_for("saves_page"))
+    rc, out = _savetool("restore", m, backup)
+    flash(t("saves_restored", name=backup) if rc == 0 else t("saves_error", err=out))
+    return redirect(url_for("saves_page"))
+
+
+@app.route("/saves/fresh", methods=["POST"])
+@login_required
+def saves_fresh():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("saves_page"))
+    if service_active(SERVICE) == "active":
+        flash(t("saves_stop_first"))
+        return redirect(url_for("saves_page"))
+    m = request.form.get("map", "")
+    rc, out = _savetool("fresh", m)
+    flash(t("saves_fresh_done") if rc == 0 else t("saves_error", err=out))
+    return redirect(url_for("saves_page"))
 # ---------------------------------------------------------------------------
 @app.route("/mods")
 @login_required
