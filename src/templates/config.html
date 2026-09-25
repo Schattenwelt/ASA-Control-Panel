@@ -35,22 +35,19 @@
       {% for g in groups %}
         {% if g.fields %}
         <div class="cfg-section">
-          {% if g.name %}<h3 class="subhead mono">[{{ g.name }}]</h3>{% endif %}
+          {% if g.name %}<h3 class="subhead mono">{{ g.name }}</h3>{% endif %}
           <div class="grid">
             {% for f in g.fields %}
-            {% if f.key in ('RCONPort', 'RCONEnabled', 'SessionName', 'Port', 'QueryPort') %}
-            {# vom Panel verwaltet – wird ausgeblendet (siehe Hinweis oben) #}
-            {% else %}
             <label class="field">
               <span class="fname mono">{{ f.key }}</span>
-              <input name="field_{{ f.id }}" value="{{ f.value }}" spellcheck="false">
+              <input name="field_{{ f.id }}" value="{{ f.display }}" spellcheck="false">
             </label>
-            {% endif %}
             {% endfor %}
           </div>
         </div>
         {% endif %}
       {% endfor %}
+      <p class="muted small" style="margin-top:4px">{{ t('cfg_hidden_note') }}</p>
       <div class="actions">
         <button class="btn primary" type="submit">{{ t('save') }}</button>
         <span class="muted">{{ t('cfg_save_hint') }}</span>

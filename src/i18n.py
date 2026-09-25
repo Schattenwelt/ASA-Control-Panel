@@ -263,6 +263,10 @@ TRANSLATIONS = {
               "(or once the server has run once)."},
     "tab_settings": {"de": "Einstellungen", "en": "Settings"},
     "tab_raw": {"de": "Rohdatei", "en": "Raw file"},
+    "cfg_hidden_note": {
+        "de": "Werte in Klammern/Anführungszeichen (Farb-/Struktur- und URL-Werte) werden zur besseren Lesbarkeit ohne die umschließenden ( ) bzw. \" \" angezeigt – beim Speichern werden sie automatisch wieder ergänzt.",
+        "en": "Values in brackets/quotes (struct/color and URL values) are shown without their surrounding ( ) or \" \" for readability – they are re-added automatically on save.",
+    },
     "cfg_save_hint": {"de": "Änderungen greifen nach einem Neustart des Servers.",
                       "en": "Changes take effect after a server restart."},
     "cfg_save_raw_btn": {"de": "Rohdatei speichern", "en": "Save raw file"},

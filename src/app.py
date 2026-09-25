@@ -51,7 +51,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.2.6"
+PANEL_VERSION = "1.2.7"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -1182,6 +1182,51 @@ def _current_file_key():
     return key if key in INI_FILES else "gus"
 
 
+# Diese Keys steuert das Panel selbst (Startparameter/Docker) – im Editor ausblenden.
+HIDDEN_KEYS = {"RCONPort", "RCONEnabled", "SessionName", "Port", "QueryPort"}
+
+
+def strip_wrap(v):
+    """Umschließende Klammern (…) oder Anführungszeichen "…" für die Anzeige
+    entfernen. Der Wert bleibt editierbar; beim Speichern wird die Umrandung
+    per rewrap wieder ergänzt."""
+    if len(v) >= 2 and v[0] == "(" and v[-1] == ")":
+        return v[1:-1]
+    if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+        return v[1:-1]
+    return v
+
+
+def rewrap(orig, new):
+    """Beim Speichern die Umrandung des Originalwerts wieder anwenden. Falls der
+    Nutzer die Klammern/Quotes selbst mit eingegeben hat, werden sie nicht doppelt
+    gesetzt."""
+    if len(orig) >= 2 and orig[0] == "(" and orig[-1] == ")":
+        inner = new[1:-1] if len(new) >= 2 and new[0] == "(" and new[-1] == ")" else new
+        return "(" + inner + ")"
+    if len(orig) >= 2 and orig[0] == '"' and orig[-1] == '"':
+        inner = new[1:-1] if len(new) >= 2 and new[0] == '"' and new[-1] == '"' else new
+        return '"' + inner + '"'
+    return new
+
+
+def display_groups(entries):
+    """Sektionen fürs Template: panel-verwaltete Keys ausblenden, sonst alle Felder
+    zeigen – aber mit „nacktem" Anzeigewert (ohne umschließende ()/"")."""
+    groups = []
+    for g in group_ini(entries):
+        fields = []
+        for f in g["fields"]:
+            if f["key"] in HIDDEN_KEYS:
+                continue
+            f = dict(f)
+            f["display"] = strip_wrap(f["value"])
+            fields.append(f)
+        if fields:
+            groups.append({"name": g["name"], "fields": fields})
+    return groups
+
+
 @app.route("/config", methods=["GET"])
 @login_required
 def config():
@@ -1189,7 +1234,7 @@ def config():
     raw, entries = read_ini(key)
     return render_template("config.html",
                            file_key=key, files=INI_LABELS,
-                           groups=group_ini(entries), raw=raw,
+                           groups=display_groups(entries), raw=raw,
                            exists=os.path.exists(INI_FILES[key]),
                            ini_path=INI_FILES[key])
 
@@ -1207,7 +1252,8 @@ def config_save():
         if e["type"] == "kv":
             field = "field_" + e["id"]
             if field in request.form:
-                edits[e["id"]] = request.form.get(field, "")
+                # angezeigt wurde der Wert ohne umschließende ()/"" – hier wieder ergänzen
+                edits[e["id"]] = rewrap(e["value"], request.form.get(field, ""))
     try:
         write_ini(key, apply_ini(entries, edits))
         enforce_rcon(key)
