@@ -51,7 +51,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.2.7"
+PANEL_VERSION = "1.3.0"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -65,8 +65,9 @@ app.secret_key = CONF["secret_key"]
 _state_lock = threading.Lock()
 
 # Offizielle ASA-Karten (Code -> Anzeigename). Reihenfolge = Anzeige.
-# ASA nutzt World-Partition-Karten mit _WP-Suffix. Alle offiziellen Karten sind
-# kostenlos (kein Steam-DLC-Besitz nötig wie bei ARK: Survival Evolved).
+# ASA nutzt World-Partition-Karten mit _WP-Suffix. Codes sind unter Linux
+# case-sensitiv. Die Karten-Dateien kommen mit dem Server-Build (AppID 2430930),
+# es ist keine Mod-ID nötig.
 OFFICIAL_MAPS = [
     ("TheIsland_WP",     "The Island"),
     ("TheCenter_WP",     "The Center"),
@@ -74,9 +75,15 @@ OFFICIAL_MAPS = [
     ("Aberration_WP",    "Aberration"),
     ("Extinction_WP",    "Extinction"),
     ("Ragnarok_WP",      "Ragnarok"),
+    ("Valguero_WP",      "Valguero"),
+    ("Genesis_WP",       "Genesis Part 1"),
     ("Astraeos_WP",      "Astraeos"),
+    ("LostColony_WP",    "Lost Colony"),
 ]
 OFFICIAL_CODES = {c for c, _ in OFFICIAL_MAPS}
+# Kostenpflichtige Karten: Der Server-Betreiber braucht sie nicht, aber jeder
+# Spieler muss die Karte besitzen, um beitreten zu können.
+PREMIUM_MAPS = {"Astraeos_WP", "LostColony_WP"}
 
 RUNTIME_DEFAULTS = {
     "map": "TheIsland_WP",
@@ -888,7 +895,7 @@ def update_check():
 def maps_page():
     rt = load_runtime()
     return render_template("maps.html", rt=rt,
-                           official=[{"code": c, "name": n}
+                           official=[{"code": c, "name": n, "premium": c in PREMIUM_MAPS}
                                      for c, n in OFFICIAL_MAPS],
                            custom=load_custom_maps(),
                            active=rt["map"])
@@ -1393,6 +1400,337 @@ def rcon_setup():
     generated = ensure_rcon_configured()
     flash(t("rcon_enabled_gen", pw=generated) if generated else t("rcon_enabled_existing"))
     return redirect(url_for("dashboard"))
+
+
+# ---------------------------------------------------------------------------
+# Geplante Neustarts (im Panel einstellbar)
+#
+# Ein Hintergrund-Thread im Panel-Prozess (waitress = ein Prozess) prüft alle
+# 20 s den Zeitplan aus schedule.json. Zum Termin: Countdown-Warnungen per RCON-
+# Broadcast, SaveWorld, dann `systemctl restart asa.service` über die vorhandene
+# sudo-Regel. Da das Docker-Image beim Containerstart die Spieldateien per
+# SteamCMD aktualisiert, ist jeder Neustart zugleich ein Spiel-Update.
+# ---------------------------------------------------------------------------
+from datetime import datetime, timedelta
+
+try:
+    from zoneinfo import ZoneInfo
+    try:
+        SCHED_TZ = ZoneInfo(CONF.get("tz") or "Europe/Berlin")
+    except Exception:
+        SCHED_TZ = None
+except ImportError:      # Python < 3.9
+    SCHED_TZ = None
+
+SCHEDULE_PATH = CONF.get("schedule_path", os.path.join(PANEL_DIR, "schedule.json"))
+SCHEDULE_DEFAULTS = {
+    "enabled": False,
+    "times": ["05:00"],
+    "days": [0, 1, 2, 3, 4, 5, 6],          # 0 = Montag … 6 = Sonntag
+    "warn_minutes": [15, 10, 5, 1],
+    "message": "Server-Neustart in {min} Minute(n) – bitte in Sicherheit bringen!",
+    "save_first": True,
+    "skip_if_stopped": True,
+    "skip_if_players": False,
+    "pull_image": False,
+    # Status (vom Scheduler gepflegt)
+    "last_slot": "",
+    "last_run": "",
+    "last_result": "",
+}
+TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+SCHED_GRACE = timedelta(minutes=5)   # verpasster Termin (z. B. Panel-Neustart) wird bis 5 min danach nachgeholt
+_sched_lock = threading.Lock()
+_job = {"thread": None, "cancel": threading.Event(), "target": None, "label": ""}
+
+
+def sched_now():
+    return datetime.now(SCHED_TZ) if SCHED_TZ else datetime.now().astimezone()
+
+
+def load_schedule():
+    data = _load_json(SCHEDULE_PATH, SCHEDULE_DEFAULTS)
+    s = dict(SCHEDULE_DEFAULTS)
+    s.update({k: data.get(k, v) for k, v in SCHEDULE_DEFAULTS.items()})
+    s["times"] = sorted({x for x in s.get("times", []) if TIME_RE.match(str(x))},
+                        key=lambda x: tuple(int(p) for p in x.split(":")))
+    s["times"] = ["%02d:%02d" % tuple(int(p) for p in x.split(":")) for x in s["times"]]
+    s["days"] = sorted({int(d) for d in s.get("days", []) if str(d).isdigit() and 0 <= int(d) <= 6})
+    s["warn_minutes"] = sorted({int(w) for w in s.get("warn_minutes", [])
+                                if str(w).isdigit() and 1 <= int(w) <= 60}, reverse=True)
+    return s
+
+
+def save_schedule(s):
+    _save_json(SCHEDULE_PATH, s)
+
+
+def _sched_update(**kw):
+    with _sched_lock:
+        s = load_schedule()
+        s.update(kw)
+        save_schedule(s)
+
+
+def _occurrences(s, now):
+    """Neustart-Termine von gestern bis übermorgen (für Fenster über Mitternacht)."""
+    out = []
+    for offset in (-1, 0, 1, 2):
+        day = (now + timedelta(days=offset)).date()
+        if day.weekday() not in s["days"]:
+            continue
+        for hm in s["times"]:
+            h, m = (int(p) for p in hm.split(":"))
+            dt = datetime(day.year, day.month, day.day, h, m, tzinfo=now.tzinfo)
+            out.append(dt)
+    return sorted(out)
+
+
+def next_restart(s=None):
+    s = s or load_schedule()
+    if not s["enabled"] or not s["times"] or not s["days"]:
+        return None
+    now = sched_now()
+    for dt in _occurrences(s, now):
+        if dt > now:
+            return dt
+    return None
+
+
+def _broadcast(msg):
+    try:
+        with rcon_connect() as r:
+            r.broadcast(msg)
+        return True
+    except (RCONError, OSError):
+        return False
+
+
+def _players_online():
+    try:
+        with rcon_connect() as r:
+            return len(r.players())
+    except (RCONError, OSError):
+        return 0
+
+
+def _restart_job(target, slot, s):
+    """Countdown + Neustart. Läuft in eigenem Thread; abbrechbar über _job['cancel']."""
+    cancel = _job["cancel"]
+    stamp = lambda: sched_now().strftime("%d.%m.%Y %H:%M")
+    try:
+        if s["skip_if_stopped"] and service_active(SERVICE) != "active":
+            _sched_update(last_run=stamp(), last_result="skipped_stopped")
+            return
+        if s["skip_if_players"] and _players_online() > 0:
+            _sched_update(last_run=stamp(), last_result="skipped_players")
+            return
+        # Warnungen (nur die, deren Zeitpunkt noch nicht vorbei ist)
+        for w in s["warn_minutes"]:
+            at = target - timedelta(minutes=w)
+            if at < sched_now() - timedelta(seconds=30):
+                continue
+            while sched_now() < at:
+                if cancel.wait(1):
+                    break
+            if cancel.is_set():
+                break
+            try:
+                text = s["message"].format(min=w)
+            except (KeyError, IndexError, ValueError):
+                text = s["message"]
+            _broadcast(text)
+        while not cancel.is_set() and sched_now() < target:
+            cancel.wait(1)
+        if cancel.is_set():
+            _broadcast("Server-Neustart abgebrochen.")
+            _sched_update(last_run=stamp(), last_result="cancelled")
+            return
+
+        if s["save_first"]:
+            try:
+                with rcon_connect() as r:
+                    r.save()
+                time.sleep(5)          # SaveWorld schreibt asynchron
+            except (RCONError, OSError):
+                pass
+        if s["pull_image"]:
+            # asa-update.service stoppt asa.service selbst (ExecStartPre) und zieht das Image
+            rc, out = run(["sudo", "-n", "systemctl", "start", UPDATE_SERVICE], timeout=3600)
+            rc2, out2 = run(["sudo", "-n", "systemctl", "enable", "--now", SERVICE], timeout=300)
+            ok = rc2 == 0
+            err = out2 if not ok else (out if rc != 0 else "")
+        else:
+            svc("enable", SERVICE)
+            rc, out = run(["sudo", "-n", "systemctl", "restart", SERVICE], timeout=300)
+            ok, err = rc == 0, out
+        _sched_update(last_run=stamp(),
+                      last_result="ok" if ok and not err else ("ok_warn:" + err[:200] if ok else "error:" + err[:200]))
+    finally:
+        with _sched_lock:
+            _job.update(thread=None, target=None, label="")
+
+
+def start_restart_job(target, slot, s, label):
+    """Startet einen Neustart-Job, falls keiner läuft. Gibt True bei Erfolg zurück."""
+    with _sched_lock:
+        if _job["thread"] is not None:
+            return False
+        _job["cancel"] = threading.Event()
+        th = threading.Thread(target=_restart_job, args=(target, slot, s),
+                              name="asa-restart-job", daemon=True)
+        _job.update(thread=th, target=target, label=label)
+        th.start()
+    return True
+
+
+def _scheduler_loop():
+    while True:
+        try:
+            s = load_schedule()
+            if s["enabled"] and s["times"] and s["days"] and _job["thread"] is None:
+                now = sched_now()
+                lead = timedelta(minutes=max(s["warn_minutes"] or [0]))
+                for dt in _occurrences(s, now):
+                    slot = dt.strftime("%Y-%m-%d %H:%M")
+                    if slot == s["last_slot"]:
+                        continue
+                    if dt - lead <= now <= dt + SCHED_GRACE:
+                        _sched_update(last_slot=slot)
+                        start_restart_job(dt, slot, s, "schedule")
+                        break
+        except Exception as e:      # Scheduler darf nie sterben
+            print("scheduler error:", e, flush=True)
+        time.sleep(20)
+
+
+_scheduler_started = False
+
+
+def start_scheduler():
+    global _scheduler_started
+    if _scheduler_started:
+        return
+    _scheduler_started = True
+    threading.Thread(target=_scheduler_loop, name="asa-scheduler", daemon=True).start()
+
+
+WEEKDAYS = [("mon", 0), ("tue", 1), ("wed", 2), ("thu", 3), ("fri", 4), ("sat", 5), ("sun", 6)]
+
+
+def _result_text(code):
+    if not code:
+        return ""
+    if code.startswith("error:"):
+        return t("sched_res_error", err=code[6:])
+    if code.startswith("ok_warn:"):
+        return t("sched_res_ok_warn", err=code[8:])
+    return t("sched_res_" + code)
+
+
+@app.route("/schedule")
+@login_required
+def schedule_page():
+    s = load_schedule()
+    nxt = next_restart(s)
+    job_target = _job["target"]
+    return render_template(
+        "schedule.html", s=s, weekdays=WEEKDAYS,
+        next_restart=(t("wd_" + WEEKDAYS[nxt.weekday()][0]) + nxt.strftime(" %d.%m.%Y %H:%M")) if nxt else "",
+        job_active=job_target is not None,
+        job_target=job_target.strftime("%H:%M:%S") if job_target else "",
+        job_label=_job["label"],
+        last_result=_result_text(s["last_result"]),
+        tz_name=str(SCHED_TZ) if SCHED_TZ else time.strftime("%Z"),
+        now=sched_now().strftime("%H:%M"),
+    )
+
+
+@app.route("/schedule/save", methods=["POST"])
+@login_required
+def schedule_save():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("schedule_page"))
+    raw_times = [x.strip() for x in re.split(r"[,;\s]+", request.form.get("times", "")) if x.strip()]
+    bad = [x for x in raw_times if not TIME_RE.match(x)]
+    if bad:
+        flash(t("sched_bad_time", val=", ".join(bad)))
+        return redirect(url_for("schedule_page"))
+    if len(raw_times) > 12:
+        flash(t("sched_too_many"))
+        return redirect(url_for("schedule_page"))
+    raw_warn = [x.strip() for x in re.split(r"[,;\s]+", request.form.get("warn_minutes", "")) if x.strip()]
+    if any(not x.isdigit() or not 1 <= int(x) <= 60 for x in raw_warn):
+        flash(t("sched_bad_warn"))
+        return redirect(url_for("schedule_page"))
+    days = [int(d) for d in request.form.getlist("days") if d.isdigit() and 0 <= int(d) <= 6]
+    message = request.form.get("message", "").replace("\r", " ").replace("\n", " ").strip()[:200]
+    enabled = bool(request.form.get("enabled"))
+    if enabled and (not raw_times or not days):
+        flash(t("sched_need_time_day"))
+        return redirect(url_for("schedule_page"))
+    with _sched_lock:
+        s = load_schedule()
+        s.update({
+            "enabled": enabled,
+            "times": raw_times,
+            "days": days,
+            "warn_minutes": [int(x) for x in raw_warn],
+            "message": message or SCHEDULE_DEFAULTS["message"],
+            "save_first": bool(request.form.get("save_first")),
+            "skip_if_stopped": bool(request.form.get("skip_if_stopped")),
+            "skip_if_players": bool(request.form.get("skip_if_players")),
+            "pull_image": bool(request.form.get("pull_image")),
+        })
+        # Ein Termin, der gerade erst vorbei ist (Nachhol-Fenster), soll durch das
+        # Speichern nicht sofort einen Neustart auslösen -> als erledigt markieren.
+        now = sched_now()
+        for dt in _occurrences(s, now):
+            if dt <= now <= dt + SCHED_GRACE:
+                s["last_slot"] = dt.strftime("%Y-%m-%d %H:%M")
+        save_schedule(s)
+    flash(t("sched_saved"))
+    return redirect(url_for("schedule_page"))
+
+
+@app.route("/schedule/now", methods=["POST"])
+@login_required
+def schedule_now():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("schedule_page"))
+    try:
+        minutes = max(0, min(60, int(request.form.get("minutes", "0"))))
+    except ValueError:
+        minutes = 0
+    s = load_schedule()
+    # Warnungen nur, soweit sie in den gewählten Countdown passen
+    s["warn_minutes"] = [w for w in s["warn_minutes"] if w <= minutes]
+    s["skip_if_players"] = False        # manuell ausgelöst = gewollt
+    target = sched_now() + timedelta(minutes=minutes, seconds=2)
+    if start_restart_job(target, "manual", s, "manual"):
+        flash(t("sched_now_started", min=minutes))
+    else:
+        flash(t("sched_job_running"))
+    return redirect(url_for("schedule_page"))
+
+
+@app.route("/schedule/cancel", methods=["POST"])
+@login_required
+def schedule_cancel():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("schedule_page"))
+    if _job["thread"] is not None:
+        _job["cancel"].set()
+        flash(t("sched_cancelled"))
+    else:
+        flash(t("sched_no_job"))
+    return redirect(url_for("schedule_page"))
+
+
+start_scheduler()
 
 
 # ---------------------------------------------------------------------------

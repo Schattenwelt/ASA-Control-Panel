@@ -150,8 +150,8 @@ TRANSLATIONS = {
     "maps_select_btn": {"de": "Als aktive Karte setzen", "en": "Set as active map"},
     "maps_current": {"de": "aktiv", "en": "active"},
     "maps_free_hint": {
-        "de": "Alle offiziellen ASA-Karten sind kostenlos – der Server lädt sie mit dem Update herunter.",
-        "en": "All official ASA maps are free – the server downloads them with the update.",
+        "de": "Alle offiziellen Karten kommen mit dem Server-Update – keine Mod-ID nötig. Kostenpflichtige Karten (DLC) braucht nur jeder Spieler, nicht der Server.",
+        "en": "All official maps ship with the server update – no mod ID needed. Paid maps (DLC) must be owned by every player, not by the server.",
     },
     "maps_modmap_note": {
         "de": "Mod-Karte – die zugehörige CurseForge-Mod-ID muss unter „Mods“ eingetragen sein.",
@@ -361,7 +361,79 @@ TRANSLATIONS = {
                      "en": "Configuration saved. Restart the server to apply."},
     "raw_saved": {"de": "Rohdatei gespeichert. Für die Übernahme den Server neu starten.",
                   "en": "Raw file saved. Restart the server to apply."},
+    # -- Karten: DLC-Kennzeichnung --
+    "maps_premium": {"de": "DLC", "en": "DLC"},
+    "maps_premium_hint": {"de": "Kostenpflichtig – jeder Spieler muss die Karte besitzen, um beizutreten.",
+                          "en": "Paid – every player must own this map to join."},
+
+    # -- Geplante Neustarts --
+    "nav_schedule": {"de": "Neustarts", "en": "Restarts"},
+    "sched_title": {"de": "Geplante Neustarts", "en": "Scheduled restarts"},
+    "sched_on": {"de": "aktiv", "en": "on"},
+    "sched_off": {"de": "aus", "en": "off"},
+    "sched_intro": {
+        "de": "Das Panel startet den Server zu den gewählten Zeiten automatisch neu – mit Countdown-Warnungen im Spiel und vorherigem Speichern. "
+              "Das Panel muss dafür laufen (läuft als Dienst ohnehin dauerhaft).",
+        "en": "The panel restarts the server automatically at the chosen times – with in-game countdown warnings and a save beforehand. "
+              "The panel has to be running for this (it runs permanently as a service anyway)."},
+    "sched_next": {"de": "Nächster Neustart", "en": "Next restart"},
+    "sched_last": {"de": "Letzter Lauf", "en": "Last run"},
+    "sched_tz": {"de": "Zeitzone · jetzt", "en": "Time zone · now"},
+    "sched_job_active": {"de": "Countdown läuft – Neustart um {time}.", "en": "Countdown running – restart at {time}."},
+    "sched_cancel_btn": {"de": "Neustart abbrechen", "en": "Cancel restart"},
+    "sched_settings": {"de": "Zeitplan", "en": "Schedule"},
+    "sched_enabled": {"de": "Automatische Neustarts aktivieren", "en": "Enable automatic restarts"},
+    "sched_times": {"de": "Uhrzeiten", "en": "Times"},
+    "sched_times_hint": {"de": "HH:MM, mehrere mit Komma – z. B. 05:00 oder 06:00, 18:00",
+                         "en": "HH:MM, several separated by commas – e.g. 05:00 or 06:00, 18:00"},
+    "sched_warn": {"de": "Warnungen (Minuten vorher)", "en": "Warnings (minutes before)"},
+    "sched_warn_hint": {"de": "Broadcast im Spiel, z. B. 15, 10, 5, 1 – leer = keine Warnung",
+                        "en": "In-game broadcast, e.g. 15, 10, 5, 1 – empty = no warning"},
+    "sched_days": {"de": "Wochentage", "en": "Weekdays"},
+    "sched_message": {"de": "Warnmeldung", "en": "Warning message"},
+    "sched_message_hint": {"de": "{min} wird durch die verbleibenden Minuten ersetzt.",
+                           "en": "{min} is replaced with the remaining minutes."},
+    "sched_save_first": {"de": "Vorher Welt speichern (SaveWorld)", "en": "Save the world first (SaveWorld)"},
+    "sched_skip_stopped": {"de": "Überspringen, wenn der Server gestoppt ist", "en": "Skip if the server is stopped"},
+    "sched_skip_players": {"de": "Überspringen, wenn Spieler online sind", "en": "Skip if players are online"},
+    "sched_pull_image": {"de": "Vorher Docker-Image aktualisieren", "en": "Pull the Docker image first"},
+    "sched_update_hint": {
+        "de": "Hinweis: Der Container aktualisiert die Spieldateien bei jedem Start per SteamCMD – jeder Neustart ist also auch ein Spiel-Update. "
+              "Neustart nicht auf ~04:30 legen, falls der Panel-Selbst-Update-Timer aktiv ist.",
+        "en": "Note: the container updates the game files via SteamCMD on every start – so each restart is also a game update. "
+              "Avoid ~04:30 if the panel self-update timer is enabled."},
+    "sched_now_title": {"de": "Neustart jetzt auslösen", "en": "Restart now"},
+    "sched_now_intro": {"de": "Einmaliger Neustart mit Countdown. Es werden die Warnungen aus dem Zeitplan genutzt, soweit sie in den Countdown passen.",
+                        "en": "One-off restart with countdown. Uses the warnings from the schedule that fit into the countdown."},
+    "sched_now_opt": {"de": "in {min} Minute(n)", "en": "in {min} minute(s)"},
+    "sched_now_opt0": {"de": "sofort", "en": "immediately"},
+    "sched_now_btn": {"de": "Neustart starten", "en": "Start restart"},
+    "sched_now_confirm": {"de": "Server wirklich neu starten?", "en": "Really restart the server?"},
+    "sched_now_started": {"de": "Neustart geplant (in {min} Minute(n)).", "en": "Restart scheduled (in {min} minute(s))."},
+    "sched_job_running": {"de": "Es läuft bereits ein Neustart-Countdown.", "en": "A restart countdown is already running."},
+    "sched_cancelled": {"de": "Neustart abgebrochen.", "en": "Restart cancelled."},
+    "sched_no_job": {"de": "Kein Neustart aktiv.", "en": "No restart active."},
+    "sched_saved": {"de": "Zeitplan gespeichert.", "en": "Schedule saved."},
+    "sched_bad_time": {"de": "Ungültige Uhrzeit: {val} (Format HH:MM).", "en": "Invalid time: {val} (format HH:MM)."},
+    "sched_too_many": {"de": "Maximal 12 Uhrzeiten.", "en": "At most 12 times."},
+    "sched_bad_warn": {"de": "Warnungen: nur ganze Minuten zwischen 1 und 60.", "en": "Warnings: whole minutes between 1 and 60 only."},
+    "sched_need_time_day": {"de": "Zum Aktivieren mindestens eine Uhrzeit und einen Wochentag angeben.",
+                            "en": "To enable, set at least one time and one weekday."},
+    "sched_res_ok": {"de": "erfolgreich neu gestartet", "en": "restarted successfully"},
+    "sched_res_ok_warn": {"de": "neu gestartet (Hinweis: {err})", "en": "restarted (note: {err})"},
+    "sched_res_error": {"de": "Fehler: {err}", "en": "error: {err}"},
+    "sched_res_cancelled": {"de": "abgebrochen", "en": "cancelled"},
+    "sched_res_skipped_stopped": {"de": "übersprungen – Server war gestoppt", "en": "skipped – server was stopped"},
+    "sched_res_skipped_players": {"de": "übersprungen – Spieler waren online", "en": "skipped – players were online"},
+    "wd_mon": {"de": "Mo", "en": "Mon"},
+    "wd_tue": {"de": "Di", "en": "Tue"},
+    "wd_wed": {"de": "Mi", "en": "Wed"},
+    "wd_thu": {"de": "Do", "en": "Thu"},
+    "wd_fri": {"de": "Fr", "en": "Fri"},
+    "wd_sat": {"de": "Sa", "en": "Sat"},
+    "wd_sun": {"de": "So", "en": "Sun"},
 }
+
 
 
 def translate(lang, key, **kw):

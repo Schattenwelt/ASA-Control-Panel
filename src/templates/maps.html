@@ -17,6 +17,7 @@
       <input type="hidden" name="code" value="{{ m.code }}">
       <div class="map-name">{{ m.name }}</div>
       <div class="map-code mono">{{ m.code }}</div>
+      {% if m.premium %}<div><span class="map-tag paid" title="{{ t('maps_premium_hint') }}">{{ t('maps_premium') }}</span></div>{% endif %}
       {% if m.code == active %}
         <span class="map-badge">{{ t('maps_current') }}</span>
       {% else %}

@@ -70,9 +70,28 @@ The first start downloads SteamCMD + the server files (~15–30 GB) into
 
 ## Maps & Mods
 
-Same as before: official `_WP` maps are built in (free), custom/mod maps take a
-map code + mod ID. Mods are CurseForge IDs in load order — they go into
-`-mods=` in `ASA_START_PARAMS` and the image downloads them on (re)start.
+All official `_WP` maps are built in: The Island, The Center, Scorched Earth,
+Aberration, Extinction, Ragnarok, Valguero, Genesis Part 1, Astraeos and Lost
+Colony. Astraeos and Lost Colony are paid DLC maps: the server doesn't need to
+own them, but every connecting player does (marked "DLC" in the panel). Custom /
+mod maps take a map code + mod ID. Mods are CurseForge IDs in load order — they
+go into `-mods=` in `ASA_START_PARAMS` and the image downloads them on (re)start.
+
+## Scheduled restarts
+
+Under **Restarts** you set automatic restarts from the web UI: one or more times
+(e.g. `05:00` or `06:00, 18:00`), weekdays, in-game countdown broadcasts
+(default 15/10/5/1 min) with a custom message, and options to save the world
+first, skip when the server is stopped or players are online, and pull the
+Docker image beforehand. A countdown can be cancelled, and a one-off restart
+with countdown can be triggered by hand.
+
+It runs as a background thread inside the panel (no extra units or sudo rules —
+it uses the existing `systemctl restart asa.service` rule). Times use the `tz`
+from `panel.json` (default `Europe/Berlin`); settings live in
+`/opt/asa-panel/schedule.json`. Since the container updates the game files on
+every start, each restart also applies pending game updates. If you use the
+panel self-update timer (~04:30), don't schedule a restart around that time.
 
 ## Ports (fixed & locked)
 
