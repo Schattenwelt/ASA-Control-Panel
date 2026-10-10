@@ -20,13 +20,17 @@ ASA_HOME="/home/asa"
 PANEL_DIR="/opt/asa-panel"
 DOCKER_DIR="/opt/asa-panel/docker"
 DATA_DIR="/opt/asa-data"
+# Ports: per Umgebungsvariable vorgeben (dann keine Abfrage) oder interaktiv wählen
+PANEL_PORT_ENV="${PANEL_PORT:-}"
 PANEL_PORT="${PANEL_PORT:-80}"
 ASA_IMAGE="${ASA_IMAGE:-ghcr.io/justamply/asa-linux-server:latest}"
 CONTAINER="asa-server-1"
 TZ_VAL="${TZ:-Europe/Berlin}"
 # Feste Ports (im Panel gesperrt)
+GAME_PORT_ENV="${GAME_PORT:-}"
+RCON_PORT_ENV="${RCON_PORT:-}"
 GAME_PORT="${GAME_PORT:-7777}"
-QUERY_PORT="${QUERY_PORT:-27015}"
+QUERY_PORT="${QUERY_PORT:-27015}"   # von ASA (EOS) nicht mehr genutzt, nur zur Anzeige
 RCON_PORT="${RCON_PORT:-27020}"
 
 PANEL_USER="${PANEL_USER:-}"
@@ -59,6 +63,48 @@ if [ -z "$PANEL_PASS" ]; then
         [ "$PANEL_PASS" = "$P2" ] && break || warn "Passwörter stimmen nicht überein."
     done
 fi
+
+# ------------------------- Ports abfragen -----------------------------------
+# Belegt? (proto: tcp|udp) – best effort, ss ist in Ubuntu-LXC vorhanden
+port_in_use() {
+    command -v ss >/dev/null 2>&1 || return 1
+    if [ "$2" = "udp" ]; then ss -lunH 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$1\$"
+    else ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]$1\$"; fi
+}
+# ask_port <Variablenname> <Beschriftung> <Proto> <bereits vergebene Ports...>
+ask_port() {
+    local var="$1" label="$2" proto="$3"; shift 3
+    local def="${!var}" val
+    while :; do
+        read -rp "$label [$def]: " val; val="${val:-$def}"
+        if ! [[ "$val" =~ ^[0-9]+$ ]] || [ "$val" -lt 1 ] || [ "$val" -gt 65535 ]; then
+            warn "Ungültiger Port: $val (1–65535)."; continue
+        fi
+        local taken="" p
+        for p in "$@"; do [ "$p" = "$val" ] && taken=1; done
+        [ -n "$taken" ] && { warn "Port $val ist schon für etwas anderes vergeben."; continue; }
+        if port_in_use "$val" "$proto"; then
+            warn "Port $val/$proto ist auf diesem System bereits belegt."
+            read -rp "Trotzdem verwenden? [j/N]: " yn
+            [[ "$yn" =~ ^[jJyY]$ ]] || continue
+        fi
+        printf -v "$var" '%s' "$val"; break
+    done
+}
+
+if [ -t 0 ] && { [ -z "$GAME_PORT_ENV" ] || [ -z "$RCON_PORT_ENV" ] || [ -z "$PANEL_PORT_ENV" ]; }; then
+    echo
+    echo "Ports festlegen (Enter = Vorgabe übernehmen). Sie werden im Panel gesperrt."
+    [ -n "$GAME_PORT_ENV" ]  || ask_port GAME_PORT  "Spielport (UDP)"   udp
+    [ -n "$RCON_PORT_ENV" ]  || ask_port RCON_PORT  "RCON-Port (TCP)"   tcp "$GAME_PORT"
+    [ -n "$PANEL_PORT_ENV" ] || ask_port PANEL_PORT "Web-Panel-Port (TCP)" tcp "$RCON_PORT"
+fi
+# Plausibilität auch bei Vorgabe per Umgebungsvariable
+for p in "$GAME_PORT" "$RCON_PORT" "$PANEL_PORT" "$QUERY_PORT"; do
+    [[ "$p" =~ ^[0-9]+$ ]] && [ "$p" -ge 1 ] && [ "$p" -le 65535 ] || die "Ungültiger Port: $p"
+done
+[ "$RCON_PORT" != "$PANEL_PORT" ] || die "RCON-Port und Panel-Port dürfen nicht gleich sein ($RCON_PORT)."
+echo "Ports: Spiel ${GAME_PORT}/UDP · RCON ${RCON_PORT}/TCP · Panel ${PANEL_PORT}/TCP"
 
 # ------------------------- Pakete + Docker ----------------------------------
 msg "Installiere Basispakete ..."

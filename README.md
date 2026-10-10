@@ -43,11 +43,13 @@ cd ASA-Control-Panel
 bash install.sh
 ```
 
-The installer asks for a panel username/password (or run non-interactively with
-`PANEL_USER=... PANEL_PASS=... bash install.sh`). Panel port defaults to 80
-(`PANEL_PORT=8080 bash install.sh`); game/RCON ports via
-`GAME_PORT=7777 RCON_PORT=27020 bash install.sh`; server image via
-`ASA_IMAGE=...`.
+The installer asks for a panel username/password and for the **ports**: game
+port (UDP, default 7777), RCON port (TCP, default 27020) and web panel port
+(TCP, default 80). Press Enter to keep a default. Invalid, duplicate or
+already-occupied ports are caught. To run non-interactively, pass everything as
+environment variables — anything given this way is not asked:
+`PANEL_USER=admin PANEL_PASS=... GAME_PORT=7777 RCON_PORT=27020 PANEL_PORT=8080 bash install.sh`.
+Server image via `ASA_IMAGE=...`.
 
 Open `http://<container-ip>`, pick a map, add CurseForge mod IDs, then **Start**.
 The first start downloads SteamCMD + the server files (~15–30 GB) into
