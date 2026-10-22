@@ -14,7 +14,7 @@
       <span class="mono">{{ next_restart or '—' }}</span></div>
     <div><span class="fname">{{ t('sched_last') }}</span>
       <span class="mono">{{ s.last_run or '—' }}</span>
-      {% if last_result %}<span class="muted small">· {{ last_result }}</span>{% endif %}</div>
+      {% if last_result %}<span class="muted small">{{ last_result }}</span>{% endif %}</div>
     <div><span class="fname">{{ t('sched_tz') }}</span>
       <span class="mono">{{ tz_name }} · {{ now }}</span></div>
   </div>
