@@ -95,6 +95,26 @@ from `panel.json` (default `Europe/Berlin`); settings live in
 every start, each restart also applies pending game updates. If you use the
 panel self-update timer (~04:30), don't schedule a restart around that time.
 
+## Transfer settings & mods (server A → server B)
+
+Under **Transfer** you copy a server's setup to another panel: `GameUserSettings.ini`,
+`Game.ini`, mods (load order + names), custom maps, the active map, launch options
+(max players, BattlEye, extra args) and optionally the session name. You choose
+per import what to apply; mods can replace or be merged into the existing list.
+
+Two ways:
+- **File:** on server A click *Download export (.json)*, on server B upload it.
+- **Direct pull:** on server A create a *transfer token*, on server B enter A's
+  address (e.g. `http://192.168.1.50`) plus the token. B fetches
+  `GET /transfer/export` with the `X-Transfer-Token` header. Revoke the token
+  afterwards.
+
+Ports, RCON settings, `ServerAdminPassword` and the join password are **never**
+transferred — B keeps its own. Importing INI files requires the server to be
+stopped (ASA rewrites `GameUserSettings.ini` on shutdown). Before every import the
+previous state is saved to `/opt/asa-panel/transfer-backups/` (last 10) and can be
+restored with one click.
+
 ## Ports (fixed & locked)
 
 Game and RCON ports are chosen at install and **locked** in the panel

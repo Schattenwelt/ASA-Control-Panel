@@ -13,6 +13,7 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.request
 from functools import wraps
 
@@ -51,7 +52,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.3.1"
+PANEL_VERSION = "1.4.0"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -1731,6 +1732,416 @@ def schedule_cancel():
 
 
 start_scheduler()
+
+
+# ---------------------------------------------------------------------------
+# Transfer: Settings + Mods von Server A nach Server B übernehmen
+#
+# Jedes Panel steuert genau einen Server. Übertragen wird ein JSON-Paket mit
+# GameUserSettings.ini, Game.ini, Mods (Reihenfolge + Namen), eigenen Karten,
+# aktiver Karte und Startoptionen. Zwei Wege:
+#   1) Export als Datei auf A herunterladen -> auf B hochladen
+#   2) B holt das Paket direkt von A (A gibt dafür ein Transfer-Token frei)
+# Passwörter (ServerAdminPassword/ServerPassword) und Ports werden NIE übertragen –
+# B behält seine eigenen Werte. Vor jedem Import wird ein Backup angelegt, das
+# sich mit einem Klick wiederherstellen lässt.
+# ---------------------------------------------------------------------------
+TRANSFER_FORMAT = "asa-panel-transfer"
+TRANSFER_VERSION = 1
+TRANSFER_PATH = CONF.get("transfer_path", os.path.join(PANEL_DIR, "transfer.json"))
+TRANSFER_BACKUP_DIR = os.path.join(PANEL_DIR, "transfer-backups")
+TRANSFER_MAX_BYTES = 8 * 1024 * 1024
+TRANSFER_KEEP_BACKUPS = 10
+# Diese INI-Keys gehören dem Zielserver (Ports/RCON/Passwörter/Name) – sie werden
+# beim Export entfernt bzw. beim Import durch die lokalen Werte ersetzt.
+TRANSFER_SECRET_KEYS = {"ServerAdminPassword", "ServerPassword"}
+TRANSFER_LOCAL_KEYS = HIDDEN_KEYS | TRANSFER_SECRET_KEYS
+TRANSFER_PARTS = ("gus", "game", "mods", "maps", "launch", "session")
+TRANSFER_DEFAULT_PARTS = {"gus", "game", "mods", "maps", "launch"}
+
+app.config["MAX_CONTENT_LENGTH"] = TRANSFER_MAX_BYTES
+
+
+def load_transfer_token():
+    return _load_json(TRANSFER_PATH, {"token": ""}).get("token", "") or ""
+
+
+def save_transfer_token(tok):
+    _save_json(TRANSFER_PATH, {"token": tok})
+
+
+def _strip_ini_keys(text, keys):
+    """Alle kv-Zeilen mit einem der Keys entfernen (Rest bleibt unverändert)."""
+    out = []
+    for e in parse_ini(text):
+        if e["type"] == "kv" and e["key"] in keys:
+            continue
+        out.append(e["raw"])
+    res = "\n".join(out)
+    return res if res.endswith("\n") or not res else res + "\n"
+
+
+def _ini_local_values(text, keys):
+    """[(section, key, value)] der lokalen Werte für die geschützten Keys."""
+    vals, sec = [], ""
+    for e in parse_ini(text):
+        if e["type"] == "section":
+            sec = e["name"]
+        elif e["type"] == "kv" and e["key"] in keys:
+            vals.append((sec, e["key"], e["value"]))
+    return vals
+
+
+def build_transfer_bundle():
+    rt = load_runtime()
+    ini = {}
+    for key in ("gus", "game"):
+        raw, _entries = read_ini(key)
+        ini[key] = _strip_ini_keys(raw, TRANSFER_SECRET_KEYS) if raw else ""
+    labels = load_mod_labels()
+    return {
+        "format": TRANSFER_FORMAT,
+        "version": TRANSFER_VERSION,
+        "panel_version": PANEL_VERSION,
+        "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "source": rt.get("session_name", ""),
+        "ini": ini,
+        "runtime": {
+            "map": rt.get("map"),
+            "session_name": rt.get("session_name", ""),
+            "max_players": rt.get("max_players", 70),
+            "battleye": bool(rt.get("battleye", True)),
+            "extra_args": rt.get("extra_args", ""),
+            "mods": list(rt.get("mods", [])),
+        },
+        "mod_labels": {m: labels[m] for m in rt.get("mods", []) if m in labels},
+        "custom_maps": load_custom_maps(),
+    }
+
+
+def validate_transfer_bundle(data):
+    """Prüft/normalisiert ein Paket. Gibt (bundle, None) oder (None, fehler) zurück."""
+    if not isinstance(data, dict) or data.get("format") != TRANSFER_FORMAT:
+        return None, t("xfer_bad_format")
+    if int(data.get("version", 0) or 0) > TRANSFER_VERSION:
+        return None, t("xfer_bad_version")
+    ini = data.get("ini") or {}
+    rt = data.get("runtime") or {}
+    if not isinstance(ini, dict) or not isinstance(rt, dict):
+        return None, t("xfer_bad_format")
+    out = {"source": str(data.get("source", ""))[:100],
+           "created": str(data.get("created", ""))[:40],
+           "ini": {}, "runtime": {}}
+    for key in ("gus", "game"):
+        v = ini.get(key, "")
+        out["ini"][key] = v if isinstance(v, str) else ""
+    mods = [str(m) for m in rt.get("mods", []) if MOD_ID_RE.match(str(m))]
+    out["runtime"]["mods"] = list(dict.fromkeys(mods))          # Duplikate raus, Reihenfolge bleibt
+    mp = str(rt.get("map", "") or "")
+    out["runtime"]["map"] = mp if MAP_CODE_RE.match(mp) else ""
+    try:
+        out["runtime"]["max_players"] = max(1, min(500, int(rt.get("max_players", 70))))
+    except (TypeError, ValueError):
+        out["runtime"]["max_players"] = 70
+    out["runtime"]["battleye"] = bool(rt.get("battleye", True))
+    out["runtime"]["extra_args"] = str(rt.get("extra_args", "") or "").replace("\n", " ").replace("\r", " ").strip()
+    sn = str(rt.get("session_name", "") or "")
+    out["runtime"]["session_name"] = sn.replace("?", "").replace("\n", "").replace("\r", "").strip()[:100]
+    labels = data.get("mod_labels") or {}
+    out["mod_labels"] = {str(k): str(v)[:100] for k, v in labels.items()
+                         if MOD_ID_RE.match(str(k))} if isinstance(labels, dict) else {}
+    maps = []
+    for m in data.get("custom_maps") or []:
+        if not isinstance(m, dict):
+            continue
+        code = str(m.get("code", ""))
+        mod_id = str(m.get("mod_id", "") or "")
+        if not MAP_CODE_RE.match(code) or code in OFFICIAL_CODES:
+            continue
+        if mod_id and not MOD_ID_RE.match(mod_id):
+            mod_id = ""
+        maps.append({"code": code, "name": str(m.get("name", code))[:100] or code, "mod_id": mod_id})
+    out["custom_maps"] = maps
+    return out, None
+
+
+def _transfer_backup(prune=True):
+    """Aktuellen Stand (INIs + Panel-Stores) sichern. Gibt den Backup-Namen zurück."""
+    import shutil
+    name = time.strftime("%Y%m%d-%H%M%S")
+    dest = os.path.join(TRANSFER_BACKUP_DIR, name)
+    n = 1
+    while os.path.exists(dest):
+        n += 1
+        dest = os.path.join(TRANSFER_BACKUP_DIR, "%s-%d" % (name, n))
+    os.makedirs(dest, mode=0o700)
+    files = {"GameUserSettings.ini": INI_FILES["gus"], "Game.ini": INI_FILES["game"],
+             "runtime.json": RUNTIME_PATH, "mods.json": MODS_PATH, "maps.json": MAPS_PATH}
+    manifest = {}
+    for label, src in files.items():
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(dest, label))
+            manifest[label] = True
+        else:
+            manifest[label] = False
+    _save_json(os.path.join(dest, "manifest.json"), manifest)
+    # alte Backups aufräumen
+    if not prune:
+        return os.path.basename(dest)
+    try:
+        dirs = sorted(d for d in os.listdir(TRANSFER_BACKUP_DIR)
+                      if os.path.isdir(os.path.join(TRANSFER_BACKUP_DIR, d)))
+        for d in dirs[:-TRANSFER_KEEP_BACKUPS]:
+            shutil.rmtree(os.path.join(TRANSFER_BACKUP_DIR, d), ignore_errors=True)
+    except OSError:
+        pass
+    return os.path.basename(dest)
+
+
+def list_transfer_backups():
+    try:
+        return sorted((d for d in os.listdir(TRANSFER_BACKUP_DIR)
+                       if os.path.isdir(os.path.join(TRANSFER_BACKUP_DIR, d))), reverse=True)
+    except OSError:
+        return []
+
+
+def _import_ini(key, text):
+    """Fremde INI übernehmen, lokale Ports/RCON/Passwörter/Sessionname behalten."""
+    local_raw, _ = read_ini(key)
+    keep = _ini_local_values(local_raw, TRANSFER_LOCAL_KEYS)
+    lines = _strip_ini_keys(text, TRANSFER_LOCAL_KEYS).replace("\r", "").split("\n")
+    by_sec = {}
+    for sec, k, v in keep:
+        by_sec.setdefault(sec, []).append("%s=%s" % (k, v))
+    out = []
+    for line in lines:
+        out.append(line)
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]") and s[1:-1] in by_sec:
+            out.extend(by_sec.pop(s[1:-1]))      # direkt unter den Section-Header
+    while out and out[-1].strip() == "":
+        out.pop()
+    for sec, kv in by_sec.items():               # Section fehlt im Paket -> anhängen
+        if sec:
+            out += ["", "[%s]" % sec]
+        out += kv
+    write_ini(key, "\n".join(out) + "\n")
+    enforce_rcon(key)
+
+
+def apply_transfer_bundle(b, parts, mods_merge=False):
+    """Paket anwenden. Gibt (liste_der_übernommenen_teile, hinweise) zurück."""
+    done, notes = [], []
+    with _state_lock:
+        for key in ("gus", "game"):
+            if key in parts:
+                if b["ini"].get(key, "").strip():
+                    _import_ini(key, b["ini"][key])
+                    done.append(INI_LABELS[key])
+                else:
+                    notes.append(t("xfer_note_empty_ini", file=INI_LABELS[key]))
+        rt = load_runtime()
+        if "maps" in parts:
+            local = {m["code"]: m for m in load_custom_maps()}
+            for m in b["custom_maps"]:
+                local[m["code"]] = m
+            save_custom_maps(list(local.values()))
+            done.append(t("xfer_part_maps"))
+        if "mods" in parts:
+            if mods_merge:
+                rt["mods"] = rt["mods"] + [m for m in b["runtime"]["mods"] if m not in rt["mods"]]
+            else:
+                rt["mods"] = list(b["runtime"]["mods"])
+            labels = load_mod_labels()
+            labels.update(b["mod_labels"])
+            save_mod_labels(labels)
+            done.append(t("xfer_part_mods_n", n=len(b["runtime"]["mods"])))
+        if "maps" in parts and b["runtime"]["map"]:
+            known = {m["code"] for m in all_maps()}
+            if b["runtime"]["map"] in known:
+                rt["map"] = b["runtime"]["map"]
+            else:
+                notes.append(t("xfer_note_map_unknown", code=b["runtime"]["map"]))
+        if "launch" in parts:
+            rt["max_players"] = b["runtime"]["max_players"]
+            rt["battleye"] = b["runtime"]["battleye"]
+            rt["extra_args"] = b["runtime"]["extra_args"]
+            done.append(t("xfer_part_launch"))
+        if "session" in parts and b["runtime"]["session_name"]:
+            rt["session_name"] = b["runtime"]["session_name"]
+            done.append(t("xfer_part_session"))
+        save_runtime(rt)
+    return done, notes
+
+
+def _transfer_parts_from_form():
+    return {p for p in TRANSFER_PARTS if request.form.get("part_" + p)}
+
+
+def _run_import(data):
+    """Gemeinsamer Ablauf für Datei-Upload und Direktabruf."""
+    b, err = validate_transfer_bundle(data)
+    if err:
+        flash(err)
+        return redirect(url_for("transfer_page"))
+    parts = _transfer_parts_from_form()
+    if not parts:
+        flash(t("xfer_no_parts"))
+        return redirect(url_for("transfer_page"))
+    # ASA schreibt die GameUserSettings.ini beim Beenden zurück -> nur bei gestopptem Server
+    if parts & {"gus", "game"} and service_active(SERVICE) == "active":
+        flash(t("xfer_stop_first"))
+        return redirect(url_for("transfer_page"))
+    try:
+        bk = _transfer_backup()
+        done, notes = apply_transfer_bundle(b, parts, mods_merge=bool(request.form.get("mods_merge")))
+    except OSError as e:
+        flash(t("xfer_error", err=str(e)))
+        return redirect(url_for("transfer_page"))
+    flash(t("xfer_done", src=b["source"] or "?", parts=", ".join(done) or "–", backup=bk))
+    for n in notes:
+        flash(n)
+    return redirect(url_for("transfer_page"))
+
+
+@app.route("/transfer")
+@login_required
+def transfer_page():
+    rt = load_runtime()
+    return render_template("transfer.html",
+                           token=load_transfer_token(),
+                           backups=list_transfer_backups(),
+                           running=(service_active(SERVICE) == "active"),
+                           defaults=TRANSFER_DEFAULT_PARTS,
+                           mods_count=len(rt["mods"]),
+                           maps_count=len(load_custom_maps()),
+                           self_url=request.host_url.rstrip("/"))
+
+
+@app.route("/transfer/download")
+@login_required
+def transfer_download():
+    bundle = build_transfer_bundle()
+    name = re.sub(r"[^A-Za-z0-9_-]+", "_", bundle["source"] or "asa").strip("_") or "asa"
+    resp = app.response_class(json.dumps(bundle, indent=2, ensure_ascii=False),
+                              mimetype="application/json")
+    resp.headers["Content-Disposition"] = 'attachment; filename="asa-transfer-%s-%s.json"' % (
+        name, time.strftime("%Y%m%d-%H%M"))
+    return resp
+
+
+@app.route("/transfer/export")
+def transfer_export():
+    """Maschinen-Endpunkt für den Direktabruf durch ein anderes Panel (Token nötig)."""
+    tok = load_transfer_token()
+    given = request.headers.get("X-Transfer-Token", "")
+    if not tok or not given or not secrets.compare_digest(tok, given):
+        return jsonify(error="forbidden"), 403
+    return jsonify(build_transfer_bundle())
+
+
+@app.route("/transfer/token", methods=["POST"])
+@login_required
+def transfer_token():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("transfer_page"))
+    if request.form.get("act") == "revoke":
+        save_transfer_token("")
+        flash(t("xfer_token_revoked"))
+    else:
+        save_transfer_token(secrets.token_urlsafe(24))
+        flash(t("xfer_token_created"))
+    return redirect(url_for("transfer_page"))
+
+
+@app.route("/transfer/upload", methods=["POST"])
+@login_required
+def transfer_upload():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("transfer_page"))
+    f = request.files.get("bundle")
+    if not f or not f.filename:
+        flash(t("xfer_no_file"))
+        return redirect(url_for("transfer_page"))
+    try:
+        data = json.loads(f.read(TRANSFER_MAX_BYTES).decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        flash(t("xfer_bad_format"))
+        return redirect(url_for("transfer_page"))
+    return _run_import(data)
+
+
+@app.route("/transfer/pull", methods=["POST"])
+@login_required
+def transfer_pull():
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("transfer_page"))
+    url = request.form.get("url", "").strip().rstrip("/")
+    tok = request.form.get("token", "").strip()
+    if url and "://" not in url:
+        url = "http://" + url
+    if not re.match(r"^https?://[A-Za-z0-9.\-\[\]:]+(/.*)?$", url) or not tok:
+        flash(t("xfer_pull_bad_input"))
+        return redirect(url_for("transfer_page"))
+    if not url.endswith("/transfer/export"):
+        url += "/transfer/export"
+    try:
+        req = urllib.request.Request(url, headers={"X-Transfer-Token": tok,
+                                                   "User-Agent": "asa-panel/" + PANEL_VERSION})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read(TRANSFER_MAX_BYTES + 1)
+        if len(body) > TRANSFER_MAX_BYTES:
+            raise ValueError("too large")
+        data = json.loads(body.decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        flash(t("xfer_pull_denied") if e.code == 403 else t("xfer_pull_failed", err="HTTP %d" % e.code))
+        return redirect(url_for("transfer_page"))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        flash(t("xfer_pull_failed", err=str(getattr(e, "reason", e))))
+        return redirect(url_for("transfer_page"))
+    return _run_import(data)
+
+
+@app.route("/transfer/restore", methods=["POST"])
+@login_required
+def transfer_restore():
+    """Ein Import-Backup zurückspielen (vorher wird der aktuelle Stand gesichert)."""
+    import shutil
+    if not check_csrf():
+        flash(t("csrf_invalid"))
+        return redirect(url_for("transfer_page"))
+    name = request.form.get("backup", "")
+    src = os.path.join(TRANSFER_BACKUP_DIR, name)
+    if not re.match(r"^[0-9-]{8,24}$", name) or not os.path.isdir(src):
+        flash(t("xfer_backup_missing"))
+        return redirect(url_for("transfer_page"))
+    if service_active(SERVICE) == "active":
+        flash(t("xfer_stop_first"))
+        return redirect(url_for("transfer_page"))
+    try:
+        with _state_lock:
+            _transfer_backup(prune=False)   # src darf beim Aufräumen nicht verschwinden
+            for label, key in (("GameUserSettings.ini", "gus"), ("Game.ini", "game")):
+                p = os.path.join(src, label)
+                if os.path.exists(p):
+                    write_ini(key, _read_text(p))
+            for label, dst in (("runtime.json", RUNTIME_PATH), ("mods.json", MODS_PATH),
+                               ("maps.json", MAPS_PATH)):
+                p = os.path.join(src, label)
+                if os.path.exists(p):
+                    tmp = dst + ".tmp"
+                    shutil.copy2(p, tmp)
+                    os.chmod(tmp, 0o600)
+                    os.replace(tmp, dst)
+    except OSError as e:
+        flash(t("xfer_error", err=str(e)))
+        return redirect(url_for("transfer_page"))
+    flash(t("xfer_restored", name=name))
+    return redirect(url_for("transfer_page"))
 
 
 # ---------------------------------------------------------------------------

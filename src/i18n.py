@@ -432,6 +432,106 @@ TRANSLATIONS = {
     "wd_fri": {"de": "Fr", "en": "Fri"},
     "wd_sat": {"de": "Sa", "en": "Sat"},
     "wd_sun": {"de": "So", "en": "Sun"},
+
+    # -- Transfer (Server A -> Server B) --
+    "nav_transfer": {"de": "Transfer", "en": "Transfer"},
+    "xfer_title": {"de": "Settings & Mods übertragen", "en": "Transfer settings & mods"},
+    "xfer_intro": {
+        "de": "Übernimmt GameUserSettings.ini, Game.ini, Mods (inkl. Reihenfolge), eigene Karten, die aktive Karte "
+              "und Startoptionen von einem anderen ASA-Panel (Server A) auf diesen Server (Server B). "
+              "Ports, RCON und Passwörter werden nie übertragen. Vor jedem Import wird automatisch ein Backup angelegt.",
+        "en": "Copies GameUserSettings.ini, Game.ini, mods (incl. load order), custom maps, the active map and "
+              "launch options from another ASA panel (server A) to this server (server B). Ports, RCON and "
+              "passwords are never transferred. A backup is created automatically before every import.",
+    },
+    "xfer_running_note": {
+        "de": "Der Server läuft. Mods/Karte/Startoptionen lassen sich übernehmen (wirksam nach Neustart) – "
+              "für die INI-Dateien den Server bitte zuerst stoppen, sonst überschreibt ASA sie beim Beenden.",
+        "en": "The server is running. Mods/map/launch options can be imported (effective after restart) – "
+              "for the INI files please stop the server first, otherwise ASA overwrites them on shutdown.",
+    },
+    "xfer_export_title": {"de": "Dieser Server als Quelle (Server A)", "en": "This server as source (server A)"},
+    "xfer_export_hint": {
+        "de": "Aktueller Stand: {mods} Mod(s), {maps} eigene Karte(n). Die Export-Datei enthält keine Passwörter.",
+        "en": "Current state: {mods} mod(s), {maps} custom map(s). The export file contains no passwords.",
+    },
+    "xfer_download_btn": {"de": "Export herunterladen (.json)", "en": "Download export (.json)"},
+    "xfer_token_title": {"de": "Direktabruf freigeben", "en": "Allow direct pull"},
+    "xfer_token_hint": {
+        "de": "Mit einem Transfer-Token kann ein anderes Panel die Settings direkt hier abholen. "
+              "Adresse und Token auf Server B eintragen. Token nach dem Transfer am besten wieder widerrufen.",
+        "en": "With a transfer token another panel can fetch the settings from here directly. Enter address and "
+              "token on server B. Best revoke the token again after the transfer.",
+    },
+    "xfer_token_none": {"de": "Kein Token aktiv – Direktabruf ist gesperrt.", "en": "No token active – direct pull is disabled."},
+    "xfer_token": {"de": "Transfer-Token", "en": "Transfer token"},
+    "xfer_this_url": {"de": "Adresse dieses Panels", "en": "Address of this panel"},
+    "xfer_token_create": {"de": "Token erzeugen", "en": "Create token"},
+    "xfer_token_new": {"de": "Neues Token erzeugen", "en": "Generate new token"},
+    "xfer_token_revoke": {"de": "Token widerrufen", "en": "Revoke token"},
+    "xfer_token_created": {"de": "Transfer-Token erzeugt.", "en": "Transfer token created."},
+    "xfer_token_revoked": {"de": "Transfer-Token widerrufen – Direktabruf gesperrt.", "en": "Transfer token revoked – direct pull disabled."},
+    "xfer_pull_title": {"de": "Von Server A holen (direkt)", "en": "Pull from server A (direct)"},
+    "xfer_pull_hint": {
+        "de": "Adresse des Quell-Panels (z. B. http://192.168.1.50 oder http://ark-a:8080) und dessen Transfer-Token.",
+        "en": "Address of the source panel (e.g. http://192.168.1.50 or http://ark-a:8080) and its transfer token.",
+    },
+    "xfer_src_url": {"de": "Adresse von Server A", "en": "Address of server A"},
+    "xfer_pull_btn": {"de": "Holen & übernehmen", "en": "Pull & apply"},
+    "xfer_upload_title": {"de": "Export-Datei importieren", "en": "Import export file"},
+    "xfer_upload_hint": {"de": "Die auf Server A heruntergeladene .json-Datei hochladen.",
+                         "en": "Upload the .json file downloaded on server A."},
+    "xfer_upload_btn": {"de": "Hochladen & übernehmen", "en": "Upload & apply"},
+    "xfer_opt_gus": {"de": "GameUserSettings.ini", "en": "GameUserSettings.ini"},
+    "xfer_opt_game": {"de": "Game.ini", "en": "Game.ini"},
+    "xfer_opt_mods": {"de": "Mods (Reihenfolge + Namen)", "en": "Mods (order + names)"},
+    "xfer_opt_maps": {"de": "Eigene Karten + aktive Karte", "en": "Custom maps + active map"},
+    "xfer_opt_launch": {"de": "Startoptionen (Max. Spieler, BattlEye, Extra-Args)",
+                        "en": "Launch options (max players, BattlEye, extra args)"},
+    "xfer_opt_session": {"de": "Sessionname (Servername)", "en": "Session name (server name)"},
+    "xfer_opt_mods_merge": {"de": "Mods ergänzen statt ersetzen (vorhandene Mods bleiben, neue werden hinten angehängt)",
+                            "en": "Merge mods instead of replacing (existing mods stay, new ones are appended)"},
+    "xfer_keep_note": {
+        "de": "Bleibt immer lokal: Ports, RCON, ServerAdminPassword, Beitrittspasswort.",
+        "en": "Always kept local: ports, RCON, ServerAdminPassword, join password.",
+    },
+    "xfer_confirm": {"de": "Ausgewählte Settings jetzt übernehmen? Der aktuelle Stand wird vorher gesichert.",
+                     "en": "Apply the selected settings now? The current state is backed up first."},
+    "xfer_backups_title": {"de": "Import rückgängig machen", "en": "Undo an import"},
+    "xfer_backups_hint": {
+        "de": "Vor jedem Import wird der vorherige Stand gesichert (die letzten 10). Wiederherstellen nur bei gestopptem Server.",
+        "en": "The previous state is saved before every import (last 10). Restore only while the server is stopped.",
+    },
+    "xfer_backups_none": {"de": "Noch keine Import-Backups vorhanden.", "en": "No import backups yet."},
+    "xfer_restore_btn": {"de": "Wiederherstellen", "en": "Restore"},
+    "xfer_confirm_restore": {"de": "Diesen Stand wiederherstellen? Der aktuelle Stand wird vorher ebenfalls gesichert.",
+                             "en": "Restore this state? The current state is backed up first as well."},
+    "xfer_restored": {"de": "Stand {name} wiederhergestellt. Server starten.", "en": "State {name} restored. Start the server."},
+    "xfer_backup_missing": {"de": "Backup nicht gefunden.", "en": "Backup not found."},
+    "xfer_done": {
+        "de": "Übernommen von „{src}“: {parts}. Backup: {backup}. Server (neu) starten, damit es wirksam wird.",
+        "en": "Imported from “{src}”: {parts}. Backup: {backup}. (Re)start the server to apply.",
+    },
+    "xfer_part_maps": {"de": "Karten", "en": "maps"},
+    "xfer_part_mods_n": {"de": "{n} Mod(s)", "en": "{n} mod(s)"},
+    "xfer_part_launch": {"de": "Startoptionen", "en": "launch options"},
+    "xfer_part_session": {"de": "Sessionname", "en": "session name"},
+    "xfer_note_empty_ini": {"de": "{file} ist im Paket leer und wurde nicht übernommen.",
+                            "en": "{file} is empty in the bundle and was not imported."},
+    "xfer_note_map_unknown": {"de": "Aktive Karte {code} ist hier unbekannt – Karte nicht geändert.",
+                              "en": "Active map {code} is unknown here – map not changed."},
+    "xfer_no_parts": {"de": "Nichts ausgewählt.", "en": "Nothing selected."},
+    "xfer_no_file": {"de": "Keine Datei ausgewählt.", "en": "No file selected."},
+    "xfer_bad_format": {"de": "Keine gültige ASA-Panel-Transferdatei.", "en": "Not a valid ASA panel transfer file."},
+    "xfer_bad_version": {"de": "Transferdatei stammt von einer neueren Panel-Version – bitte dieses Panel aktualisieren.",
+                         "en": "Transfer file is from a newer panel version – please update this panel."},
+    "xfer_stop_first": {"de": "Für INI-Dateien bitte zuerst den Server stoppen (ASA überschreibt sie sonst beim Beenden).",
+                        "en": "For INI files please stop the server first (ASA overwrites them on shutdown otherwise)."},
+    "xfer_pull_bad_input": {"de": "Bitte gültige Adresse und Token angeben.", "en": "Please enter a valid address and token."},
+    "xfer_pull_denied": {"de": "Server A hat den Abruf abgelehnt – Token falsch oder nicht freigegeben.",
+                         "en": "Server A refused the request – wrong token or pull not enabled."},
+    "xfer_pull_failed": {"de": "Abruf von Server A fehlgeschlagen: {err}", "en": "Fetching from server A failed: {err}"},
+    "xfer_error": {"de": "Transfer fehlgeschlagen: {err}", "en": "Transfer failed: {err}"},
 }
 
 

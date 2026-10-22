@@ -536,3 +536,12 @@ select:focus { outline: none; border-color: var(--blue); }
   .nav { justify-content: flex-start; width: 100%; }
   .nav a { padding: 6px 10px; font-size: .88rem; }
 }
+
+/* ---- Transfer (Server A -> B) ---- */
+.xfer-parts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px 16px; margin: 14px 0 6px;
+}
+.xfer-parts .field.check span { font-size: .9rem; }
+.xfer-parts .xfer-sub { grid-column: 1 / -1; opacity: .85; }
+input[type=file] { padding: 7px 9px; cursor: pointer; }
