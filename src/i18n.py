@@ -491,9 +491,15 @@ TRANSLATIONS = {
     "xfer_opt_session": {"de": "Sessionname (Servername)", "en": "Session name (server name)"},
     "xfer_opt_mods_merge": {"de": "Mods ergänzen statt ersetzen (vorhandene Mods bleiben, neue werden hinten angehängt)",
                             "en": "Merge mods instead of replacing (existing mods stay, new ones are appended)"},
+    "xfer_opt_secrets": {"de": "Passwörter (ServerAdminPassword + Beitrittspasswort)",
+                         "en": "Passwords (ServerAdminPassword + join password)"},
     "xfer_keep_note": {
-        "de": "Bleibt immer lokal: Ports, RCON, ServerAdminPassword, Beitrittspasswort.",
-        "en": "Always kept local: ports, RCON, ServerAdminPassword, join password.",
+        "de": "Bleibt immer lokal: Ports, RCON-Port und Servername. Ohne „Passwörter“ behält "
+              "dieser Server auch sein Admin- und Beitrittspasswort. Hinweis: Export-Datei "
+              "und Direktabruf enthalten die Passwörter im Klartext.",
+        "en": "Always kept local: ports, RCON port and server name. Without \"Passwords\" this "
+              "server also keeps its admin and join password. Note: the export file and direct "
+              "pull contain the passwords in plain text.",
     },
     "xfer_confirm": {"de": "Ausgewählte Settings jetzt übernehmen? Der aktuelle Stand wird vorher gesichert.",
                      "en": "Apply the selected settings now? The current state is backed up first."},
@@ -516,6 +522,9 @@ TRANSLATIONS = {
     "xfer_part_mods_n": {"de": "{n} Mod(s)", "en": "{n} mod(s)"},
     "xfer_part_launch": {"de": "Startoptionen", "en": "launch options"},
     "xfer_part_session": {"de": "Sessionname", "en": "session name"},
+    "xfer_part_secrets": {"de": "Passwörter", "en": "passwords"},
+    "xfer_note_no_secrets": {"de": "Das Paket enthält keine Passwörter (älteres Panel auf Server A) – lokale Passwörter bleiben.",
+                             "en": "The bundle contains no passwords (older panel on server A) – local passwords are kept."},
     "xfer_note_empty_ini": {"de": "{file} ist im Paket leer und wurde nicht übernommen.",
                             "en": "{file} is empty in the bundle and was not imported."},
     "xfer_note_map_unknown": {"de": "Aktive Karte {code} ist hier unbekannt – Karte nicht geändert.",

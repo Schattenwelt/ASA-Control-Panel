@@ -3,7 +3,7 @@
 
 {% macro part_options() %}
   <div class="xfer-parts">
-    {% for p in ['gus', 'game', 'mods', 'maps', 'launch', 'session'] %}
+    {% for p in ['gus', 'game', 'mods', 'maps', 'launch', 'session', 'secrets'] %}
     <label class="field check">
       <input type="checkbox" name="part_{{ p }}" value="1" {{ 'checked' if p in defaults }}>
       <span>{{ t('xfer_opt_' + p) }}</span>

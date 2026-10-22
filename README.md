@@ -109,8 +109,11 @@ Two ways:
   `GET /transfer/export` with the `X-Transfer-Token` header. Revoke the token
   afterwards.
 
-Ports, RCON settings, `ServerAdminPassword` and the join password are **never**
-transferred — B keeps its own. Importing INI files requires the server to be
+Ports, `RCONEnabled`/`RCONPort` and the session name are **never** transferred —
+B keeps its own; they are replaced in place, so the INI keeps A's key order.
+`ServerAdminPassword` and the join password are transferred when **Passwords** is
+selected (default); untick it to keep B's own. The export file and the direct
+pull then contain these passwords in plain text. Importing INI files requires the server to be
 stopped (ASA rewrites `GameUserSettings.ini` on shutdown). Before every import the
 previous state is saved to `/opt/asa-panel/transfer-backups/` (last 10) and can be
 restored with one click.

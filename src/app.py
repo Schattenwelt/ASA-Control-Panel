@@ -52,7 +52,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.4.0"
+PANEL_VERSION = "1.4.1"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -1742,9 +1742,12 @@ start_scheduler()
 # aktiver Karte und Startoptionen. Zwei Wege:
 #   1) Export als Datei auf A herunterladen -> auf B hochladen
 #   2) B holt das Paket direkt von A (A gibt dafür ein Transfer-Token frei)
-# Passwörter (ServerAdminPassword/ServerPassword) und Ports werden NIE übertragen –
-# B behält seine eigenen Werte. Vor jedem Import wird ein Backup angelegt, das
-# sich mit einem Klick wiederherstellen lässt.
+# Ports, RCONEnabled/RCONPort und SessionName bleiben IMMER lokal (B behält seine
+# Werte). Passwörter (ServerAdminPassword + Beitrittspasswort) werden mit
+# übertragen, wenn der Teil „Passwörter“ gewählt ist (Standard). Lokale Keys
+# werden an Ort und Stelle ersetzt – die Reihenfolge der INI bleibt wie auf A.
+# Vor jedem Import wird ein Backup angelegt, das sich mit einem Klick
+# wiederherstellen lässt.
 # ---------------------------------------------------------------------------
 TRANSFER_FORMAT = "asa-panel-transfer"
 TRANSFER_VERSION = 1
@@ -1752,12 +1755,11 @@ TRANSFER_PATH = CONF.get("transfer_path", os.path.join(PANEL_DIR, "transfer.json
 TRANSFER_BACKUP_DIR = os.path.join(PANEL_DIR, "transfer-backups")
 TRANSFER_MAX_BYTES = 8 * 1024 * 1024
 TRANSFER_KEEP_BACKUPS = 10
-# Diese INI-Keys gehören dem Zielserver (Ports/RCON/Passwörter/Name) – sie werden
-# beim Export entfernt bzw. beim Import durch die lokalen Werte ersetzt.
+# HIDDEN_KEYS (Ports/RCON/Name) gehören immer dem Zielserver. Die Passwort-Keys
+# nur dann, wenn der Teil „secrets“ NICHT gewählt ist.
 TRANSFER_SECRET_KEYS = {"ServerAdminPassword", "ServerPassword"}
-TRANSFER_LOCAL_KEYS = HIDDEN_KEYS | TRANSFER_SECRET_KEYS
-TRANSFER_PARTS = ("gus", "game", "mods", "maps", "launch", "session")
-TRANSFER_DEFAULT_PARTS = {"gus", "game", "mods", "maps", "launch"}
+TRANSFER_PARTS = ("gus", "game", "mods", "maps", "launch", "session", "secrets")
+TRANSFER_DEFAULT_PARTS = {"gus", "game", "mods", "maps", "launch", "secrets"}
 
 app.config["MAX_CONTENT_LENGTH"] = TRANSFER_MAX_BYTES
 
@@ -1768,17 +1770,6 @@ def load_transfer_token():
 
 def save_transfer_token(tok):
     _save_json(TRANSFER_PATH, {"token": tok})
-
-
-def _strip_ini_keys(text, keys):
-    """Alle kv-Zeilen mit einem der Keys entfernen (Rest bleibt unverändert)."""
-    out = []
-    for e in parse_ini(text):
-        if e["type"] == "kv" and e["key"] in keys:
-            continue
-        out.append(e["raw"])
-    res = "\n".join(out)
-    return res if res.endswith("\n") or not res else res + "\n"
 
 
 def _ini_local_values(text, keys):
@@ -1792,12 +1783,20 @@ def _ini_local_values(text, keys):
     return vals
 
 
+def _ini_value(text, section, key):
+    """Ersten Wert von key in section aus einem INI-Text lesen (oder None)."""
+    for sec, k, v in _ini_local_values(text or "", {key}):
+        if sec == section:
+            return v.split("?", 1)[0].strip() if key == "ServerAdminPassword" else v
+    return None
+
+
 def build_transfer_bundle():
     rt = load_runtime()
     ini = {}
     for key in ("gus", "game"):
         raw, _entries = read_ini(key)
-        ini[key] = _strip_ini_keys(raw, TRANSFER_SECRET_KEYS) if raw else ""
+        ini[key] = raw or ""
     labels = load_mod_labels()
     return {
         "format": TRANSFER_FORMAT,
@@ -1812,6 +1811,7 @@ def build_transfer_bundle():
             "max_players": rt.get("max_players", 70),
             "battleye": bool(rt.get("battleye", True)),
             "extra_args": rt.get("extra_args", ""),
+            "server_password": rt.get("server_password", ""),
             "mods": list(rt.get("mods", [])),
         },
         "mod_labels": {m: labels[m] for m in rt.get("mods", []) if m in labels},
@@ -1845,6 +1845,9 @@ def validate_transfer_bundle(data):
         out["runtime"]["max_players"] = 70
     out["runtime"]["battleye"] = bool(rt.get("battleye", True))
     out["runtime"]["extra_args"] = str(rt.get("extra_args", "") or "").replace("\n", " ").replace("\r", " ").strip()
+    sp = rt.get("server_password")             # fehlt bei Paketen älterer Panels
+    out["runtime"]["server_password"] = None if sp is None else \
+        str(sp).replace("?", "").replace(" ", "").replace("\n", "").replace("\r", "")[:100]
     sn = str(rt.get("session_name", "") or "")
     out["runtime"]["session_name"] = sn.replace("?", "").replace("\n", "").replace("\r", "").strip()[:100]
     labels = data.get("mod_labels") or {}
@@ -1906,25 +1909,55 @@ def list_transfer_backups():
         return []
 
 
-def _import_ini(key, text):
-    """Fremde INI übernehmen, lokale Ports/RCON/Passwörter/Sessionname behalten."""
+def _import_ini(key, text, with_secrets=True):
+    """Fremde INI 1:1 übernehmen. Lokal bleiben nur Ports/RCON/Sessionname
+    (HIDDEN_KEYS) und – ohne with_secrets – die Passwörter. Diese Keys werden
+    an ihrer Stelle in der fremden Datei ersetzt (Reihenfolge bleibt wie auf A),
+    doppelte Vorkommen entfernt; fehlt ein lokaler Key dort, kommt er ans Ende
+    seiner Section."""
     local_raw, _ = read_ini(key)
-    keep = _ini_local_values(local_raw, TRANSFER_LOCAL_KEYS)
-    lines = _strip_ini_keys(text, TRANSFER_LOCAL_KEYS).replace("\r", "").split("\n")
-    by_sec = {}
-    for sec, k, v in keep:
-        by_sec.setdefault(sec, []).append("%s=%s" % (k, v))
-    out = []
-    for line in lines:
-        out.append(line)
-        s = line.strip()
-        if s.startswith("[") and s.endswith("]") and s[1:-1] in by_sec:
-            out.extend(by_sec.pop(s[1:-1]))      # direkt unter den Section-Header
+    incoming = [(sec, k) for sec, k, _v in _ini_local_values(text, TRANSFER_SECRET_KEYS)]
+    keep = set(HIDDEN_KEYS)
+    for k in TRANSFER_SECRET_KEYS:
+        # Ohne Passwort-Teil, oder Paket enthält den Key nicht (älteres Panel): lokal behalten
+        if not with_secrets or not any(ik == k for _s, ik in incoming):
+            keep.add(k)
+    local = {}
+    for sec, k, v in _ini_local_values(local_raw, keep):
+        local.setdefault((sec, k), v)            # erstes Vorkommen gilt
+
+    out, sec, placed = [], "", set()
+    sec_last = {}                                # Section -> Index der letzten Nicht-Leerzeile
+    for e in parse_ini(text):
+        if e["type"] == "section":
+            sec = e["name"]
+            out.append(e["raw"])
+            sec_last[sec] = len(out) - 1
+            continue
+        if e["type"] == "kv" and e["key"] in keep:
+            ident = (sec, e["key"])
+            if ident in local and ident not in placed:
+                out.append("%s=%s" % (e["key"], local[ident]))   # an Ort und Stelle
+                placed.add(ident)
+                sec_last[sec] = len(out) - 1
+            continue                             # Duplikat bzw. lokal nicht vorhanden -> weg
+        out.append(e["raw"])
+        if e["raw"].strip():
+            sec_last[sec] = len(out) - 1
+
+    # Lokale Keys, die im Paket fehlen, ans Ende ihrer Section
+    missing = {}
+    for ident, v in local.items():
+        if ident not in placed:
+            missing.setdefault(ident[0], []).append("%s=%s" % (ident[1], v))
+    for sname in sorted((n for n in missing if n in sec_last), key=lambda n: -sec_last[n]):
+        i = sec_last[sname] + 1
+        out[i:i] = missing.pop(sname)
     while out and out[-1].strip() == "":
         out.pop()
-    for sec, kv in by_sec.items():               # Section fehlt im Paket -> anhängen
-        if sec:
-            out += ["", "[%s]" % sec]
+    for sname, kv in missing.items():            # Section fehlt im Paket -> anhängen
+        if sname:
+            out += ["", "[%s]" % sname]
         out += kv
     write_ini(key, "\n".join(out) + "\n")
     enforce_rcon(key)
@@ -1934,10 +1967,11 @@ def apply_transfer_bundle(b, parts, mods_merge=False):
     """Paket anwenden. Gibt (liste_der_übernommenen_teile, hinweise) zurück."""
     done, notes = [], []
     with _state_lock:
+        with_secrets = "secrets" in parts
         for key in ("gus", "game"):
             if key in parts:
                 if b["ini"].get(key, "").strip():
-                    _import_ini(key, b["ini"][key])
+                    _import_ini(key, b["ini"][key], with_secrets)
                     done.append(INI_LABELS[key])
                 else:
                     notes.append(t("xfer_note_empty_ini", file=INI_LABELS[key]))
@@ -1968,6 +2002,22 @@ def apply_transfer_bundle(b, parts, mods_merge=False):
             rt["battleye"] = b["runtime"]["battleye"]
             rt["extra_args"] = b["runtime"]["extra_args"]
             done.append(t("xfer_part_launch"))
+        if with_secrets:
+            # Beitrittspasswort: Quelle ist runtime.json (asa-launch.sh schreibt es
+            # bei jedem Start in die INI) – sonst wäre es nach dem Neustart wieder leer.
+            sp = b["runtime"].get("server_password")
+            if sp is None:                       # älteres Paket: aus der INI nehmen
+                sp = _ini_value(b["ini"].get("gus", ""), "ServerSettings", "ServerPassword")
+            if sp is not None:
+                rt["server_password"] = sp
+            if "gus" not in parts:               # Admin-Passwort auch ohne GUS-Import
+                apw = _ini_value(b["ini"].get("gus", ""), "ServerSettings", "ServerAdminPassword")
+                if apw:
+                    ini_set(GUS_PATH, "ServerSettings", "ServerAdminPassword", apw)
+            if sp is not None or _ini_value(b["ini"].get("gus", ""), "ServerSettings", "ServerAdminPassword"):
+                done.append(t("xfer_part_secrets"))
+            else:
+                notes.append(t("xfer_note_no_secrets"))
         if "session" in parts and b["runtime"]["session_name"]:
             rt["session_name"] = b["runtime"]["session_name"]
             done.append(t("xfer_part_session"))
