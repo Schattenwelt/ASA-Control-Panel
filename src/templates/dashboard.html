@@ -64,7 +64,15 @@
     <button class="btn tiny" type="button" id="btn-update-check"
             onclick="checkUpdate()">{{ t('update_check_btn') }}</button>
     <span class="update-badge mono" id="update-badge"></span>
+    <label class="skip-toggle {{ 'on' if skip_update }}" id="skip-toggle"
+           title="{{ t('launch_skip_update_hint') }}">
+      <input type="checkbox" id="skip-update" {{ 'checked' if skip_update }}
+             onchange="toggleSkip(this)">
+      <span class="skip-switch" aria-hidden="true"></span>
+      <span class="skip-label">{{ t('launch_skip_update') }}</span>
+    </label>
   </div>
+  <p class="skip-warn muted small" id="skip-warn" {{ '' if skip_update else 'hidden' }}>⚠ {{ t('skip_update_active') }}</p>
 </section>
 
 <section class="panel">
@@ -301,6 +309,21 @@ async function checkUpdate() {
     } else { badge.textContent = UT.unknown; badge.classList.add('warn'); }
   } catch (e) { badge.textContent = UT.unknown; badge.classList.add('warn'); }
   btn.disabled = false;
+}
+
+async function toggleSkip(cb) {
+  const wrap = document.getElementById('skip-toggle');
+  const warn = document.getElementById('skip-warn');
+  cb.disabled = true;
+  try {
+    const body = new URLSearchParams({ csrf: CSRF, skip: cb.checked ? '1' : '0' });
+    const d = await (await fetch("{{ url_for('update_skip') }}", { method: 'POST', body })).json();
+    if (!d.ok) throw new Error(d.msg || 'error');
+    cb.checked = d.skip;
+  } catch (e) { cb.checked = !cb.checked; }
+  wrap.classList.toggle('on', cb.checked);
+  warn.hidden = !cb.checked;
+  cb.disabled = false;
 }
 
 poll();

@@ -44,6 +44,7 @@ print("BATTLEYE=" + q("1" if d.get("battleye", True) else ""))
 print("SRVPW=" + q(d.get("server_password", "")))
 print("MODS=" + q(",".join(str(m) for m in d.get("mods", []) if str(m).isdigit())))
 print("EXTRA=" + q(d.get("extra_args", "")))
+print("SKIP_UPDATE=" + q("1" if d.get("skip_update", False) else ""))
 PY
 )"
 
@@ -166,6 +167,36 @@ mkdir -p "$DOCKER_DIR"
 echo "[asa-launch] Karte=$MAP  Mods=${MODS:-–}  Port=$GAME_PORT/udp  RCON=$RCON_PORT  MaxPlayers=$MAXP"
 echo "[asa-launch] Container=asa-server-1  Image=$ASA_IMAGE"
 
+# Update-Prüfung überspringen (Panel: Karten → Startparameter).
+# Das Image ruft bei jedem Start fest "steamcmd.sh +app_update" auf und hat dafür
+# keinen Schalter. Deshalb legen wir per Compose-Override ein Stub-Skript
+# schreibgeschützt ÜBER steamcmd.sh – die echte SteamCMD-Installation im
+# Datenverzeichnis bleibt unangetastet. Ist die Option aus, wird das Override
+# einfach nicht verwendet (Container wird dann neu erzeugt, SteamCMD läuft wieder).
+SKIP_OVERRIDE="$DOCKER_DIR/docker-compose.skip-update.yml"
+SKIP_STUB="$DOCKER_DIR/steamcmd-skip.sh"
+COMPOSE_FILES=(-f "$DOCKER_DIR/docker-compose.yml")
+if [ -n "$SKIP_UPDATE" ]; then
+  cat > "$SKIP_STUB" <<'STUB'
+#!/bin/sh
+# Vom ASA-Panel erzeugt: Update-Prüfung ist abgeschaltet.
+echo "[asa-panel] SteamCMD übersprungen (Update-Prüfung im Panel deaktiviert): $*"
+exit 0
+STUB
+  chmod 0755 "$SKIP_STUB"
+  cat > "$SKIP_OVERRIDE" <<YML
+# Vom ASA-Panel erzeugt (asa-launch.sh) – nicht von Hand bearbeiten.
+services:
+  asa-server-1:
+    volumes:
+      - "${SKIP_STUB}:/home/gameserver/steamcmd/steamcmd.sh:ro"
+YML
+  COMPOSE_FILES+=(-f "$SKIP_OVERRIDE")
+  echo "[asa-launch] WARNUNG: Update-Prüfung deaktiviert – ASA startet ohne SteamCMD mit den vorhandenen Spieldateien."
+else
+  rm -f "$SKIP_OVERRIDE" "$SKIP_STUB"
+fi
+
 cd "$DOCKER_DIR"
 # Vordergrund: systemd verfolgt den Prozess; SIGTERM -> compose stoppt den Container
-exec docker compose --env-file "$ENV_FILE" up --no-log-prefix
+exec docker compose --env-file "$ENV_FILE" "${COMPOSE_FILES[@]}" up --no-log-prefix

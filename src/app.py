@@ -52,7 +52,7 @@ MODS_PATH = CONF.get("mods_path", os.path.join(PANEL_DIR, "mods.json"))
 # Steam-AppID des ASA-Dedicated-Servers (für die Update-Prüfung)
 APPID = str(CONF.get("appid", "2430930"))
 # Panel-Version (wird im Footer angezeigt; kein Git-/Commit-Bezug in der UI)
-PANEL_VERSION = "1.4.2"
+PANEL_VERSION = "1.5.0"
 
 # Feste Ports (beim Installieren gesetzt, im Panel gesperrt). Sind sie in der
 # panel.json hinterlegt, überschreiben sie die runtime.json-Werte und die
@@ -98,6 +98,9 @@ RUNTIME_DEFAULTS = {
     "server_password": "",  # Beitrittspasswort (leer = offener Server)
     "mods": [],
     "extra_args": "",
+    # SteamCMD-Update beim Containerstart überspringen (Notbetrieb, z. B. wenn
+    # Steam nicht erreichbar ist). asa-launch.sh legt dann ein Override an.
+    "skip_update": False,
 }
 
 MAP_CODE_RE = re.compile(r"^[A-Za-z0-9_]{2,64}$")
@@ -833,6 +836,7 @@ def dashboard():
         connect_kind=kind,
         session_name=rt.get("session_name", "ASA Server"),
         installed_build=installed_build(),
+        skip_update=bool(rt.get("skip_update")),
     )
 
 
@@ -886,6 +890,20 @@ def update_check():
         return jsonify(ok=False, msg=t("csrf_invalid"))
     inst, lat, st = update_status()
     return jsonify(ok=True, installed=inst, latest=lat, status=st)
+
+
+@app.route("/update-skip", methods=["POST"])
+@login_required
+def update_skip():
+    """Schalter 'Update-Prüfung beim Start' (Übersicht). Wirkt beim nächsten Start."""
+    if not check_csrf():
+        return jsonify(ok=False, msg=t("csrf_invalid"))
+    skip = request.form.get("skip") == "1"
+    with _state_lock:
+        rt = load_runtime()
+        rt["skip_update"] = skip
+        save_runtime(rt)
+    return jsonify(ok=True, skip=skip)
 
 
 # ---------------------------------------------------------------------------

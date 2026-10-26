@@ -222,6 +222,24 @@ TRANSLATIONS = {
                      "en": "Launch parameters saved. Restart the server."},
     "launch_save_btn": {"de": "Startparameter speichern", "en": "Save launch parameters"},
     "launch_bad_number": {"de": "Ungültiger Zahlenwert.", "en": "Invalid numeric value."},
+    "launch_skip_update": {"de": "Update-Prüfung beim Start überspringen",
+                           "en": "Skip update check on start"},
+    "launch_skip_update_hint": {
+        "de": "Notbetrieb: Der Container startet ASA direkt mit den vorhandenen Spieldateien, ohne SteamCMD. "
+              "Hilft, wenn Steam nicht erreichbar ist (Timeout bei „Waiting for client config“). "
+              "Solange aktiv, gibt es keine Spiel-Updates – nach einem ASA-Patch können Spieler mit "
+              "neuem Client nicht mehr beitreten. Wirkt beim nächsten (Neu-)Start.",
+        "en": "Emergency mode: the container starts ASA directly with the existing game files, without SteamCMD. "
+              "Useful when Steam is unreachable (timeout at \"Waiting for client config\"). "
+              "While enabled there are no game updates – after an ASA patch, players on the new client "
+              "can no longer join. Takes effect on the next (re)start.",
+    },
+    "skip_update_active": {
+        "de": "Update-Prüfung abgeschaltet – der Server startet ohne SteamCMD und erhält keine Spiel-Updates. "
+              "Wirkt beim nächsten (Neu-)Start; nach einem ASA-Patch wieder einschalten.",
+        "en": "Update check disabled – the server starts without SteamCMD and gets no game updates. "
+              "Takes effect on the next (re)start; turn it back on after an ASA patch.",
+    },
 
     # -- Mods (CurseForge) --
     "mods_title": {"de": "Mod-Verwaltung", "en": "Mod management"},

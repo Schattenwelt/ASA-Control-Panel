@@ -69,6 +69,12 @@ The first start downloads SteamCMD + the server files (~15–30 GB) into
   password from `panel.json`.
 - **Update** pulls a newer image; the container updates the game files itself on
   the next start.
+- **Skip update check** (Overview, next to the build number): emergency switch for when
+  SteamCMD can't reach Steam (e.g. `Info request for AppId 7 returned error
+  Timeout`, exit status 5/8). `asa-launch.sh` then mounts a stub over
+  `steamcmd.sh` via `docker/docker-compose.skip-update.yml`, so ASA starts with
+  the existing game files. No game updates while enabled – turn it off again
+  after an ASA patch. The real SteamCMD install is never modified.
 
 ## Maps & Mods
 
