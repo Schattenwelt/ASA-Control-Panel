@@ -457,10 +457,12 @@ TRANSLATIONS = {
     "xfer_intro": {
         "de": "Übernimmt GameUserSettings.ini, Game.ini, Mods (inkl. Reihenfolge), eigene Karten, die aktive Karte "
               "und Startoptionen von einem anderen ASA-Panel (Server A) auf diesen Server (Server B). "
-              "Ports, RCON und Passwörter werden nie übertragen. Vor jedem Import wird automatisch ein Backup angelegt.",
+              "Ports, RCON und Servername bleiben immer lokal; Passwörter nur, wenn „Passwörter“ ausgewählt ist. "
+              "Vor jedem Import wird automatisch ein Backup angelegt.",
         "en": "Copies GameUserSettings.ini, Game.ini, mods (incl. load order), custom maps, the active map and "
               "launch options from another ASA panel (server A) to this server (server B). Ports, RCON and "
-              "passwords are never transferred. A backup is created automatically before every import.",
+              "server name always stay local; passwords only if “Passwords” is selected. "
+              "A backup is created automatically before every import.",
     },
     "xfer_running_note": {
         "de": "Der Server läuft. Mods/Karte/Startoptionen lassen sich übernehmen (wirksam nach Neustart) – "
@@ -470,8 +472,10 @@ TRANSLATIONS = {
     },
     "xfer_export_title": {"de": "Dieser Server als Quelle (Server A)", "en": "This server as source (server A)"},
     "xfer_export_hint": {
-        "de": "Aktueller Stand: {mods} Mod(s), {maps} eigene Karte(n). Die Export-Datei enthält keine Passwörter.",
-        "en": "Current state: {mods} mod(s), {maps} custom map(s). The export file contains no passwords.",
+        "de": "Aktueller Stand: {mods} Mod(s), {maps} eigene Karte(n). Achtung: Export-Datei und Direktabruf enthalten "
+              "ServerAdminPassword und Beitrittspasswort im Klartext.",
+        "en": "Current state: {mods} mod(s), {maps} custom map(s). Note: the export file and direct pull contain "
+              "the ServerAdminPassword and join password in plain text.",
     },
     "xfer_download_btn": {"de": "Export herunterladen (.json)", "en": "Download export (.json)"},
     "xfer_token_title": {"de": "Direktabruf freigeben", "en": "Allow direct pull"},
